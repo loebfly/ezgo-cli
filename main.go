@@ -1,33 +1,22 @@
 package main
 
 import (
-	"errors"
+	"ezgo-cli/run"
+	"flag"
 	"fmt"
-	"strconv"
+)
 
-	"github.com/manifoldco/promptui"
+const (
+	CmdRun = "run"
 )
 
 func main() {
-	validate := func(input string) error {
-		_, err := strconv.ParseFloat(input, 64)
-		if err != nil {
-			return errors.New("Invalid number")
-		}
-		return nil
+	cmd := flag.String("c", "", "运行命令")
+	flag.Parse()
+	switch *cmd {
+	case CmdRun:
+		run.Start()
+	default:
+		fmt.Println("Invalid command", cmd)
 	}
-
-	prompt := promptui.Prompt{
-		Label:    "Number",
-		Validate: validate,
-	}
-
-	result, err := prompt.Run()
-
-	if err != nil {
-		fmt.Printf("Prompt failed %v\n", err)
-		return
-	}
-
-	fmt.Printf("You choose %q\n", result)
 }
