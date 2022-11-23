@@ -23,8 +23,7 @@ func Exec() {
 
 	projectName := getProjectName()
 
-	projectDir := fmt.Sprintf("%s/%s", config.GetProjectDir(), projectName)
-
+	projectDir := fmt.Sprintf("%s%s", config.GetProjectDir(), projectName)
 	if selectUi.IsAgree("是否要生成swag文档?") {
 		fmt.Println("开始执行 swag init")
 		_, err := cmd.ExecInDir(projectDir, "swag", "init")
@@ -63,36 +62,40 @@ func Exec() {
 			}
 		}
 		fmt.Printf("开始查找是否有%s配置的旧进程\n", ymlName)
-
-		wcCmd, _ := cmd.ExecWithPreCmd(getOldPidCmd(projectName, ymlName), "wc", "-l")
-		pidCount := wcCmd.Stdout.(*bytes.Buffer).String()
-		pidCount = strings.TrimSpace(pidCount)
-		if pidCount != "0" && pidCount != "" {
-			fmt.Printf("找到%s配置的%s个旧进程\n", ymlName, pidCount)
-			fmt.Printf("开始杀死%s配置的旧进程\n", ymlName)
-			printCmd, err := cmd.ExecWithPreCmd(getOldPidCmd(projectName, ymlName), "awk", "{print $2}")
-			if err != nil {
-				fmt.Printf("杀死旧进程失败: %s\n", err.Error())
-				os.Exit(0)
+		pidCmd := getOldPidCmd(projectName, ymlName)
+		if pidCmd != nil {
+			wcCmd, _ := cmd.ExecWithPreCmd(pidCmd, "wc", "-l")
+			pidCount := wcCmd.Stdout.(*bytes.Buffer).String()
+			pidCount = strings.TrimSpace(pidCount)
+			if pidCount != "0" && pidCount != "" {
+				fmt.Printf("找到%s配置的%s个旧进程\n", ymlName, pidCount)
+				fmt.Printf("开始杀死%s配置的旧进程\n", ymlName)
+				pidCmd = getOldPidCmd(projectName, ymlName)
+				printCmd, err := cmd.ExecWithPreCmd(pidCmd, "awk", "{print $2}")
+				if err != nil {
+					fmt.Printf("杀死旧进程失败: %s\n", err.Error())
+					os.Exit(0)
+				}
+				_, err = cmd.ExecWithPreCmd(printCmd, "xargs", "kill", "-9")
+				if err != nil {
+					fmt.Printf("杀死旧进程失败: %s\n", err.Error())
+					os.Exit(0)
+				}
+				fmt.Printf("杀死%s配置的旧进程成功\n", ymlName)
+			} else {
+				fmt.Printf("未找到%s配置的旧进程, 无需终止\n", ymlName)
 			}
-			_, err = cmd.ExecWithPreCmd(printCmd, "xargs", "kill", "-9")
-			if err != nil {
-				fmt.Printf("杀死旧进程失败: %s\n", err.Error())
-				os.Exit(0)
-			}
-			fmt.Printf("杀死%s配置的旧进程成功\n", ymlName)
 		} else {
 			fmt.Printf("未找到%s配置的旧进程, 无需终止\n", ymlName)
 		}
-		fmt.Printf("开始后台运行%s配置的项目\n", ymlName)
-		_, err := cmd.ExecInDir(projectDir, "nohup", projectName, "-f", ymlName, ">", config.GetLogDir(), "2>&1", "&")
-		if err != nil {
-			fmt.Printf("后台运行项目失败: %s\n", err.Error())
-			os.Exit(0)
-		}
-		fmt.Printf("后台运行%s配置的项目成功\n", ymlName)
-		fmt.Printf("查看日志: tail -f -n %s/%s.$(date %%F).log\n", config.GetLogDir(), projectName)
-		fmt.Printf("查看out: tail -f -n %s/%s.out\n", config.GetLogDir(), projectName)
+
+		fmt.Println("开启程序后台运行")
+		appPath := fmt.Sprintf("%s/%s", projectDir, projectName)
+		fmt.Printf("程序路径: %s\n", appPath)
+		fmt.Printf("配置路径: %s\n", projectDir+"/"+ymlName)
+		_, _ = cmd.ExecWithNohup(appPath, "-f", ymlName, ">", config.GetLogDir(), "2>&1", "&")
+		fmt.Printf("查看日志: tail -f -n200 %s%s.$(date %%F).log\n", config.GetLogDir(), projectName)
+		fmt.Printf("查看out: tail -f -n200 %s%s.out\n", config.GetLogDir(), projectName)
 		fmt.Printf("查看进程: ps -ef | grep %s\n", projectName)
 		os.Exit(0)
 	}
@@ -161,26 +164,22 @@ func getYmlName(projectDir string) string {
 func getOldPidCmd(projectName, ymlName string) *exec.Cmd {
 	psCmd, err := cmd.ExecInDir("", "ps", "-ef")
 	if err != nil {
-		fmt.Printf("查找旧进程失败: %s\n", err.Error())
-		os.Exit(0)
+		return nil
 	}
 
 	grepCmd, err := cmd.ExecWithPreCmd(psCmd, "grep", config.GetProjectDir())
 	if err != nil {
-		fmt.Printf("查找旧进程失败: %s\n", err.Error())
-		os.Exit(0)
+		return nil
 	}
 
 	grepCmd, err = cmd.ExecWithPreCmd(grepCmd, "grep", projectName+"/"+projectName)
 	if err != nil {
-		fmt.Printf("查找旧进程失败: %s\n", err.Error())
-		os.Exit(0)
+		return nil
 	}
 
 	grepCmd, err = cmd.ExecWithPreCmd(grepCmd, "grep", ymlName)
 	if err != nil {
-		fmt.Printf("查找旧进程失败: %s\n", err.Error())
-		os.Exit(0)
+		return nil
 	}
 	return grepCmd
 }
