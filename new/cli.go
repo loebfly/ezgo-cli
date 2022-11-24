@@ -3,10 +3,12 @@ package new
 import (
 	"ezgo-cli/cmd"
 	"ezgo-cli/new/ezgin"
+	"ezgo-cli/new/prompt"
 	"ezgo-cli/tools"
 	"flag"
 	"fmt"
 	"github.com/levigross/grequests"
+	"github.com/manifoldco/promptui"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -41,7 +43,10 @@ func Exec() {
 	fmt.Println("项目名称: ", projectName)
 
 	fmt.Println("清空项目目录...")
-	_ = tools.File(ProjectDir).DeleteDirSubFiles()
+	err = tools.File(ProjectDir).DeleteDirSubFiles()
+	if err != nil {
+		fmt.Println("清空项目目录失败: ", err.Error())
+	}
 	fmt.Println("清空项目目录成功")
 
 	fmt.Println("准备项目模板...")
@@ -66,8 +71,7 @@ func Exec() {
 	// 删除临时文件夹
 	_ = os.RemoveAll(exampleDir)
 
-	ezginCfg := GetEzginCfg()
-	ezginCfg.App.Name = projectName
+	ezginCfg := GetEzginCfg(projectName)
 	WriteYml(ezginCfg)
 
 	// 执行 go mod init 命令
@@ -88,9 +92,55 @@ func Exec() {
 	fmt.Println("go mod tidy 执行完毕")
 }
 
-func GetEzginCfg() ezgin.Config {
+func GetEzginCfg(projectName string) ezgin.Config {
+	fmt.Printf("准备 %s 的配置参数...", projectName)
+	var cfg = ezgin.Config{}
+	cfg.App.Name = projectName
 
-	return ezgin.Config{}
+	cfg.App.Ip = prompt.InputUi.RunWithLabel(promptExit, "请输入项目IP地址")
+
+	cfg.App.Port = prompt.InputUi.Run(promptExit, promptui.Prompt{
+		Label: "请输入http端口号",
+		Validate: func(input string) error {
+			port := strings.TrimSpace(input)
+			if port != "" {
+				if _, err := strconv.Atoi(port); err != nil {
+					return fmt.Errorf("http端口号必须为数字")
+				}
+			}
+			return nil
+		},
+	}, true)
+
+	cfg.App.PortSsl = prompt.InputUi.Run(promptExit, promptui.Prompt{
+		Label: "请输入https端口号",
+		Validate: func(input string) error {
+			port := strings.TrimSpace(input)
+			if port != "" {
+				if _, err := strconv.Atoi(port); err != nil {
+					return fmt.Errorf("https端口号必须为数字")
+				}
+			}
+			return nil
+		},
+	}, true)
+
+	cfg.App.Cert = prompt.InputUi.RunWithLabel(promptExit, "请输入证书文件路径")
+	cfg.App.Key = prompt.InputUi.RunWithLabel(promptExit, "请输入私钥文件路径")
+	cfg.App.Debug = prompt.SelectUi.Run(promptExit, promptui.Select{
+		Label: "请选择是否开启debug模式",
+		Items: []string{"true", "false"},
+	})
+	cfg.App.Version = prompt.InputUi.Run(promptExit, promptui.Prompt{
+		Label:   "请输入项目版本号",
+		Default: "1.0.0",
+	})
+	cfg.App.Env = prompt.SelectUi.Run(promptExit, promptui.Select{
+		Label: "请选择项目运行环境",
+		Items: []string{"dev", "test", "prod"},
+	})
+
+	return cfg
 }
 
 func WriteYml(cfg ezgin.Config) {
@@ -99,11 +149,11 @@ func WriteYml(cfg ezgin.Config) {
 
 	yml = strings.ReplaceAll(yml, "{app-name}", cfg.App.Name)
 	yml = strings.ReplaceAll(yml, "{app-ip}", cfg.App.Version)
-	yml = strings.ReplaceAll(yml, "{app-port}", strconv.Itoa(cfg.App.Port))
-	yml = strings.ReplaceAll(yml, "{app-port-ssl}", strconv.Itoa(cfg.App.PortSsl))
+	yml = strings.ReplaceAll(yml, "{app-port}", cfg.App.Port)
+	yml = strings.ReplaceAll(yml, "{app-port-ssl}", cfg.App.PortSsl)
 	yml = strings.ReplaceAll(yml, "{app-cert}", cfg.App.Cert)
 	yml = strings.ReplaceAll(yml, "{app-key}", cfg.App.Key)
-	yml = strings.ReplaceAll(yml, "{app-debug}", strconv.FormatBool(cfg.App.Debug))
+	yml = strings.ReplaceAll(yml, "{app-debug}", cfg.App.Debug)
 	yml = strings.ReplaceAll(yml, "{app-version}", cfg.App.Version)
 	yml = strings.ReplaceAll(yml, "{app-env}", cfg.App.Env)
 
@@ -128,11 +178,15 @@ func WriteYml(cfg ezgin.Config) {
 	yml = strings.ReplaceAll(yml, "{i18n-server_name}", cfg.I18n.ServerName)
 	yml = strings.ReplaceAll(yml, "{i18n-check_uri}", cfg.I18n.CheckUri)
 	yml = strings.ReplaceAll(yml, "{i18n-query_uri}", cfg.I18n.QueryUri)
-	yml = strings.ReplaceAll(yml, "{i18n-duration}", strconv.Itoa(cfg.I18n.Duration))
+	yml = strings.ReplaceAll(yml, "{i18n-duration}", cfg.I18n.Duration)
 
 	_ = tools.File(ProjectDir + "/ezgin.yml").WriteString(yml)
 
 	// 重命名为cfg.App.Name
 	_ = os.Rename(ProjectDir+"/ezgin.yml", ProjectDir+"/"+cfg.App.Name+".yml")
 	fmt.Println(yml)
+}
+
+func promptExit() {
+	_ = tools.File(ProjectDir).DeleteDirSubFiles()
 }

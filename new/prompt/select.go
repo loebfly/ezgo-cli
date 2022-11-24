@@ -7,16 +7,13 @@ import (
 
 type selectPromptUi struct{}
 
-func (receiver selectPromptUi) Yml(label string, items []string) string {
-	prompt := promptui.Select{
-		Label:    label,
-		Items:    items,
-		HideHelp: true,
-		Size:     10,
-	}
+func (receiver selectPromptUi) Run(exitFunc func(), prompt promptui.Select) string {
 	_, result, err := prompt.Run()
-	if err != nil && err.Error() == "^C" {
-		os.Exit(1)
+	if err != nil {
+		if err.Error() == "^C" {
+			exitFunc()
+			os.Exit(0)
+		}
 	}
 	return result
 }

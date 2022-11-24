@@ -2,21 +2,28 @@ package prompt
 
 import (
 	"github.com/manifoldco/promptui"
+	"os"
 )
 
 type inputPromptUi struct{}
 
-func (receiver inputPromptUi) Yml(label string, validate ...promptui.ValidateFunc) string {
-	if len(validate) == 0 {
-		validate = append(validate, func(input string) error {
-			return nil
-		})
+func (receiver inputPromptUi) Run(exitFunc func(), prompt promptui.Prompt, retry ...bool) string {
+	result, err := prompt.Run()
+	if err != nil {
+		if err.Error() == "^C" {
+			exitFunc()
+			os.Exit(0)
+		}
+		if len(retry) > 0 && retry[0] {
+			return receiver.Run(exitFunc, prompt, retry...)
+		}
 	}
-	prompt := promptui.Prompt{
-		Label:       label,
-		Validate:    validate[0],
-		HideEntered: true,
-	}
-	result, _ := prompt.Run()
 	return result
+}
+
+func (receiver inputPromptUi) RunWithLabel(exitFunc func(), label string) string {
+	prompt := promptui.Prompt{
+		Label: label,
+	}
+	return receiver.Run(exitFunc, prompt)
 }

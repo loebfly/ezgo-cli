@@ -11,11 +11,11 @@ type Config struct {
 type App struct {
 	Name    string // 应用名称
 	Ip      string // 应用ip地址, 默认为本机ip
-	Port    int    // http服务端口
-	PortSsl int    // https服务端口
+	Port    string // http服务端口
+	PortSsl string // https服务端口
 	Cert    string // 应用证书文件路径, 用于https, 如果不需要https,则不需要配置
 	Key     string // 应用私钥文件路径, 用于https,如果不需要https,则不需要配置
-	Debug   bool   // 是否开启debug模式, 默认false, 如果开启, 则不会被其他服务调用
+	Debug   string // 是否开启debug模式, 默认false, 如果开启, 则不会被其他服务调用
 	Version string // 版本号
 	Env     string // 环境 test, dev, prod
 } // 应用配置
@@ -48,5 +48,5 @@ type I18n struct {
 	ServerName string // i18n微服务名称, 默认x-lang
 	CheckUri   string // i18n服务检查uri, 默认/lang/string/app/version
 	QueryUri   string // i18n服务查询uri, 默认/lang/string/list
-	Duration   int    //  i18n服务查询间隔, 默认360s
+	Duration   string //  i18n服务查询间隔, 默认360s
 } // i18n配置

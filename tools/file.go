@@ -95,7 +95,7 @@ func (receiver fileT) DeleteDirSubFiles() error {
 	}
 	for _, file := range fis {
 		filePath := path.Join(receiver.path, file.Name())
-		err = os.Remove(filePath)
+		err = os.RemoveAll(filePath)
 		if err != nil {
 			return err
 		}
