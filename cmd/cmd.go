@@ -4,6 +4,8 @@ import (
 	"bufio"
 	"bytes"
 	"fmt"
+	"io"
+	"os"
 	"os/exec"
 )
 
@@ -19,11 +21,24 @@ func ExecInDir(dir string, cmd string, args ...string) (*exec.Cmd, error) {
 	if err != nil {
 		return command, err
 	}
+	err = command.Wait()
+	return command, err
+}
+
+func ExecInDirWithPrint(dir string, cmd string, args ...string) (*exec.Cmd, error) {
+	command := exec.Command(cmd, args...)
+	stdout, _ := command.StdoutPipe()
+	command.Stderr = os.Stderr
+	command.Dir = dir
+	err := command.Start()
+	if err != nil {
+		return command, err
+	}
 
 	reader := bufio.NewReader(stdout)
 	for {
-		line, err := reader.ReadString('\n')
-		if err != nil {
+		line, err2 := reader.ReadString('\n')
+		if err2 != nil || io.EOF == err2 {
 			break
 		}
 		fmt.Println(line)

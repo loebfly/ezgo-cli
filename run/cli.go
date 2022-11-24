@@ -43,7 +43,7 @@ func Exec() {
 	projectDir := fmt.Sprintf("%s%s", OptionsWorkDir, projectName)
 	if OptionsSwagInit {
 		fmt.Println("开始执行 swag init")
-		_, err := cmd.ExecInDir(projectDir, "swag", "init")
+		_, err := cmd.ExecInDirWithPrint(projectDir, "swag", "init")
 		if err != nil {
 			fmt.Printf("生成swag文档失败: %s", err.Error())
 			os.Exit(0)
@@ -52,10 +52,10 @@ func Exec() {
 	}
 
 	if OptionsGoBuild {
-		_, err := os.Stat(projectDir + "/go.mod")
+		_, err = os.Stat(projectDir + "/go.mod")
 		if err == nil || os.IsExist(err) {
 			fmt.Println("开始执行 go mod tidy")
-			_, err := cmd.ExecInDir(projectDir, "go", "mod", "tidy", "-compat=1.17")
+			_, err := cmd.ExecInDirWithPrint(projectDir, "go", "mod", "tidy", "-compat=1.17")
 			if err != nil {
 				fmt.Printf("go mod tidy失败: %s", err.Error())
 				os.Exit(0)
@@ -63,7 +63,7 @@ func Exec() {
 			fmt.Println("go mod tidy 执行完毕")
 		}
 		fmt.Println("开始执行 go build")
-		_, err = cmd.ExecInDir(projectDir, "go", "build")
+		_, err = cmd.ExecInDirWithPrint(projectDir, "go", "build")
 		if err != nil {
 			fmt.Printf("编译项目失败: %s", err.Error())
 			os.Exit(0)
