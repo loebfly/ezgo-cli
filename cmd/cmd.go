@@ -5,7 +5,6 @@ import (
 	"bytes"
 	"fmt"
 	"os/exec"
-	"syscall"
 )
 
 // ExecInDir 在指定目录下执行命令
@@ -48,15 +47,4 @@ func ExecWithPreCmd(preCmd *exec.Cmd, cmd string, args ...string) (*exec.Cmd, er
 	}
 	err = command.Wait()
 	return command, err
-}
-
-// ExecWithNohup 后台运行命令
-func ExecWithNohup(args ...string) (*exec.Cmd, error) {
-	command := exec.Command("nohup", args...)
-	command.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
-	err := command.Start()
-	if err != nil {
-		return command, err
-	}
-	return command, nil
 }

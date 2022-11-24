@@ -1,24 +1,32 @@
 package main
 
 import (
-	"ezgo-cli/config"
-	"ezgo-cli/let"
 	"ezgo-cli/run"
-	"flag"
 	"fmt"
+	"os"
+)
+
+const (
+	CommandRun = "run"
 )
 
 func main() {
-	fmt.Printf("欢迎使用ezgo-cli\n")
-
-	config.Init()
-
-	cmd := flag.String("app", "", "运行命令")
-	flag.Parse()
-	switch *cmd {
-	case let.CmdRun:
+	fmt.Println("ezgo-cli v1.0.0")
+	if len(os.Args) < 2 {
+		printHelp()
+		os.Exit(0)
+	}
+	switch os.Args[1] {
+	case CommandRun:
 		run.Exec()
 	default:
-		fmt.Println("Invalid command", cmd)
+		printHelp()
 	}
+}
+
+func printHelp() {
+	fmt.Println("Usage: ezgo-cli [COMMAND] [options]")
+	fmt.Println("Commands:")
+	fmt.Println("  run: 运行项目")
+	fmt.Println("Run 'ezgo-cli [COMMAND] -help' get options for command")
 }

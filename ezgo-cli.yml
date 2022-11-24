@@ -1,8 +1,0 @@
-ezgo-cli:
-  run:
-    # 项目根目录
-    # /opt/go/src/flamecloud.cn/
-    project_dir: /Users/luchunqing/Documents/flamecloud.cn/project/openapi
-    # 日志文件根目录
-    # /opt/logs/
-    log_dir: /Users/luchunqing/Documents/flamecloud.cn/project/logs

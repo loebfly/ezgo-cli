@@ -3,8 +3,7 @@ package run
 import (
 	"bytes"
 	"ezgo-cli/cmd"
-	"ezgo-cli/config"
-	"ezgo-cli/let"
+	"flag"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -13,18 +12,36 @@ import (
 )
 
 var (
+	OptionsWorkDir  = ""   // -workDir 项目根目录
+	OptionsLogDir   = ""   // -logDir 日志目录
+	OptionsSwagInit = true // -swagInit 是否生成swagger文档
+	OptionsGoBuild  = true // -build 是否编译
+)
+
+var (
 	inputUi  = inputPromptUi{}
 	selectUi = selectPromptUi{}
 )
 
 func Exec() {
-	fmt.Println("项目根目录: ", config.GetProjectDir())
-	fmt.Println("日志根目录: ", config.GetLogDir())
+	cmdFlag := flag.NewFlagSet("run", flag.ExitOnError)
+	cmdFlag.StringVar(&OptionsWorkDir, "workDir", "/opt/go/src/flamecloud.cn/", "项目根目录")
+	cmdFlag.StringVar(&OptionsLogDir, "logDir", "/opt/logs/", "日志根目录")
+	cmdFlag.BoolVar(&OptionsSwagInit, "swag", true, "是否生成swagger文档")
+	cmdFlag.BoolVar(&OptionsGoBuild, "build", true, "是否要编译项目")
+	err := cmdFlag.Parse(os.Args[2:])
+	if err != nil {
+		fmt.Println("解析命令行参数失败: ", err.Error())
+		return
+	}
+
+	fmt.Println("项目根目录: ", OptionsWorkDir)
+	fmt.Println("日志根目录: ", OptionsLogDir)
 
 	projectName := getProjectName()
 
-	projectDir := fmt.Sprintf("%s%s", config.GetProjectDir(), projectName)
-	if selectUi.IsAgree("是否要生成swag文档?") {
+	projectDir := fmt.Sprintf("%s%s", OptionsWorkDir, projectName)
+	if OptionsSwagInit {
 		fmt.Println("开始执行 swag init")
 		_, err := cmd.ExecInDir(projectDir, "swag", "init")
 		if err != nil {
@@ -34,7 +51,7 @@ func Exec() {
 		fmt.Println("swag init 执行完毕")
 	}
 
-	if selectUi.IsAgree("是否要编译项目?") {
+	if OptionsGoBuild {
 		_, err := os.Stat(projectDir + "/go.mod")
 		if err == nil || os.IsExist(err) {
 			fmt.Println("开始执行 go mod tidy")
@@ -54,51 +71,57 @@ func Exec() {
 		fmt.Println("go build 执行完毕")
 	}
 
-	if selectUi.IsAgree("是否要后台运行项目?") {
-		ymlName := getYmlName(projectDir)
-		if ymlName == "" {
-			if !selectUi.IsAgree("未找到项目YML配置, 是否继续运行?") {
+	ymlName := getYmlName(projectDir)
+	if ymlName == "" {
+		if !selectUi.IsAgree("未找到项目YML配置, 是否继续运行?") {
+			os.Exit(0)
+		}
+	}
+
+	fmt.Printf("开始查找是否有%s配置的旧进程\n", ymlName)
+	pidCmd := getOldPidCmd(projectName, ymlName)
+	if pidCmd != nil {
+		wcCmd, _ := cmd.ExecWithPreCmd(pidCmd, "wc", "-l")
+		pidCount := wcCmd.Stdout.(*bytes.Buffer).String()
+		pidCount = strings.TrimSpace(pidCount)
+		if pidCount != "0" && pidCount != "" {
+			fmt.Printf("找到%s配置的%s个旧进程\n", ymlName, pidCount)
+			fmt.Printf("开始杀死%s配置的旧进程\n", ymlName)
+			pidCmd = getOldPidCmd(projectName, ymlName)
+			printCmd, err := cmd.ExecWithPreCmd(pidCmd, "awk", "{print $2}")
+			if err != nil {
+				fmt.Printf("杀死旧进程失败: %s\n", err.Error())
 				os.Exit(0)
 			}
-		}
-		fmt.Printf("开始查找是否有%s配置的旧进程\n", ymlName)
-		pidCmd := getOldPidCmd(projectName, ymlName)
-		if pidCmd != nil {
-			wcCmd, _ := cmd.ExecWithPreCmd(pidCmd, "wc", "-l")
-			pidCount := wcCmd.Stdout.(*bytes.Buffer).String()
-			pidCount = strings.TrimSpace(pidCount)
-			if pidCount != "0" && pidCount != "" {
-				fmt.Printf("找到%s配置的%s个旧进程\n", ymlName, pidCount)
-				fmt.Printf("开始杀死%s配置的旧进程\n", ymlName)
-				pidCmd = getOldPidCmd(projectName, ymlName)
-				printCmd, err := cmd.ExecWithPreCmd(pidCmd, "awk", "{print $2}")
-				if err != nil {
-					fmt.Printf("杀死旧进程失败: %s\n", err.Error())
-					os.Exit(0)
-				}
-				_, err = cmd.ExecWithPreCmd(printCmd, "xargs", "kill", "-9")
-				if err != nil {
-					fmt.Printf("杀死旧进程失败: %s\n", err.Error())
-					os.Exit(0)
-				}
-				fmt.Printf("杀死%s配置的旧进程成功\n", ymlName)
-			} else {
-				fmt.Printf("未找到%s配置的旧进程, 无需终止\n", ymlName)
+			_, err = cmd.ExecWithPreCmd(printCmd, "xargs", "kill", "-9")
+			if err != nil {
+				fmt.Printf("杀死旧进程失败: %s\n", err.Error())
+				os.Exit(0)
 			}
+			fmt.Printf("杀死%s配置的旧进程成功\n", ymlName)
 		} else {
 			fmt.Printf("未找到%s配置的旧进程, 无需终止\n", ymlName)
 		}
-
-		fmt.Println("开启程序后台运行")
-		appPath := fmt.Sprintf("%s/%s", projectDir, projectName)
-		fmt.Printf("程序路径: %s\n", appPath)
-		fmt.Printf("配置路径: %s\n", projectDir+"/"+ymlName)
-		_, _ = cmd.ExecWithNohup(appPath, "-f", ymlName, ">", config.GetLogDir(), "2>&1", "&")
-		fmt.Printf("查看日志: tail -f -n200 %s%s.$(date %%F).log\n", config.GetLogDir(), projectName)
-		fmt.Printf("查看out: tail -f -n200 %s%s.out\n", config.GetLogDir(), projectName)
-		fmt.Printf("查看进程: ps -ef | grep %s\n", projectName)
-		os.Exit(0)
+	} else {
+		fmt.Printf("未找到%s配置的旧进程, 无需终止\n", ymlName)
 	}
+
+	fmt.Println("开启程序后台运行")
+	appPath := fmt.Sprintf("%s/%s", projectDir, projectName)
+	outPath := fmt.Sprintf("%s%s.out", OptionsLogDir, projectName)
+	fmt.Printf("程序路径: %s\n", appPath)
+	fmt.Printf("配置路径: %s\n", projectDir+"/"+ymlName)
+
+	nohup := fmt.Sprintf("nohup %s -f %s >%s 2>&1 &", appPath, ymlName, outPath)
+	_, err = exec.Command("sh", "-c", nohup).CombinedOutput()
+	if err != nil {
+		fmt.Printf("后台运行项目失败: %s\n", err.Error())
+	} else {
+		fmt.Println("后台运行项目成功")
+	}
+	fmt.Printf("查看日志: tail -f -n200 %s%s.$(date +%%F).log\n", OptionsLogDir, projectName)
+	fmt.Printf("查看out: tail -f -n200 %s%s.out\n", OptionsLogDir, projectName)
+	fmt.Printf("查看进程: ps -ef | grep %s\n", projectName)
 }
 
 func getProjectName() string {
@@ -108,7 +131,7 @@ func getProjectName() string {
 		fmt.Printf("正在匹配包含'%s'的项目\n", keyword)
 	}
 
-	dirFiles, err := ioutil.ReadDir(config.YmlData.String(let.ProjectDirKey))
+	dirFiles, err := ioutil.ReadDir(OptionsWorkDir)
 	if err != nil {
 		fmt.Printf("读取项目目录失败: %s", err.Error())
 		os.Exit(0)
@@ -167,7 +190,7 @@ func getOldPidCmd(projectName, ymlName string) *exec.Cmd {
 		return nil
 	}
 
-	grepCmd, err := cmd.ExecWithPreCmd(psCmd, "grep", config.GetProjectDir())
+	grepCmd, err := cmd.ExecWithPreCmd(psCmd, "grep", OptionsWorkDir)
 	if err != nil {
 		return nil
 	}
