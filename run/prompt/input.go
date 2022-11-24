@@ -1,4 +1,4 @@
-package run
+package prompt
 
 import (
 	"fmt"
@@ -7,7 +7,7 @@ import (
 
 type inputPromptUi struct{}
 
-func (receiver inputPromptUi) searchKeyword() string {
+func (receiver inputPromptUi) SearchKeyword() string {
 	prompt := promptui.Prompt{
 		Label: "请输入项目关键字(可为空)",
 		Validate: func(input string) error {

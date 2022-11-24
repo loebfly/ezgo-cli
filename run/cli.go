@@ -3,6 +3,7 @@ package run
 import (
 	"bytes"
 	"ezgo-cli/cmd"
+	"ezgo-cli/run/prompt"
 	"flag"
 	"fmt"
 	"io/ioutil"
@@ -16,11 +17,6 @@ var (
 	OptionsLogDir   = ""   // -logDir 日志目录
 	OptionsSwagInit = true // -swagInit 是否生成swagger文档
 	OptionsGoBuild  = true // -build 是否编译
-)
-
-var (
-	inputUi  = inputPromptUi{}
-	selectUi = selectPromptUi{}
 )
 
 func Exec() {
@@ -57,7 +53,7 @@ func Exec() {
 			fmt.Println("开始执行 go mod tidy")
 			_, err := cmd.ExecInDirWithPrint(projectDir, "go", "mod", "tidy", "-compat=1.17")
 			if err != nil {
-				fmt.Printf("go mod tidy失败: %s", err.Error())
+				fmt.Printf("go mod tidy 执行失败: %s\n", err.Error())
 				os.Exit(0)
 			}
 			fmt.Println("go mod tidy 执行完毕")
@@ -65,7 +61,7 @@ func Exec() {
 		fmt.Println("开始执行 go build")
 		_, err = cmd.ExecInDirWithPrint(projectDir, "go", "build")
 		if err != nil {
-			fmt.Printf("编译项目失败: %s", err.Error())
+			fmt.Printf("编译项目失败: %s\n", err.Error())
 			os.Exit(0)
 		}
 		fmt.Println("go build 执行完毕")
@@ -73,7 +69,7 @@ func Exec() {
 
 	ymlName := getYmlName(projectDir)
 	if ymlName == "" {
-		if !selectUi.IsAgree("未找到项目YML配置, 是否继续运行?") {
+		if !prompt.SelectUi.IsAgree("未找到项目YML配置, 是否继续运行?") {
 			os.Exit(0)
 		}
 	}
@@ -125,7 +121,7 @@ func Exec() {
 }
 
 func getProjectName() string {
-	keyword := inputUi.searchKeyword()
+	keyword := prompt.InputUi.SearchKeyword()
 
 	if keyword != "" {
 		fmt.Printf("正在匹配包含'%s'的项目\n", keyword)
@@ -148,7 +144,7 @@ func getProjectName() string {
 	}
 
 	if len(projects) == 0 {
-		if selectUi.IsAgree("未找到匹配的项目, 是否重新搜索?") {
+		if prompt.SelectUi.IsAgree("未找到匹配的项目, 是否重新搜索?") {
 			return getProjectName()
 		}
 		os.Exit(0)
@@ -159,7 +155,7 @@ func getProjectName() string {
 		return projects[0]
 	}
 
-	return selectUi.Project(projects)
+	return prompt.SelectUi.Project(projects)
 }
 
 func getYmlName(projectDir string) string {
@@ -181,7 +177,7 @@ func getYmlName(projectDir string) string {
 	if len(ymlNames) == 1 {
 		return ymlNames[0]
 	}
-	return selectUi.Yml(ymlNames)
+	return prompt.SelectUi.Yml(ymlNames)
 }
 
 func getOldPidCmd(projectName, ymlName string) *exec.Cmd {

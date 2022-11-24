@@ -1,22 +1,25 @@
 package main
 
 import (
+	"ezgo-cli/new"
 	"ezgo-cli/run"
 	"fmt"
 	"os"
 )
 
 const (
-	CommandRun = "run"
+	CommandRun = "run" // 运行项目
+	CommandNew = "new" // 初始化项目
 )
 
 func main() {
-	fmt.Println("ezgo-cli v1.0.0")
 	if len(os.Args) < 2 {
 		printHelp()
-		os.Exit(0)
+		return
 	}
 	switch os.Args[1] {
+	case CommandNew:
+		new.Exec()
 	case CommandRun:
 		run.Exec()
 	default:
@@ -27,6 +30,7 @@ func main() {
 func printHelp() {
 	fmt.Println("Usage: ezgo-cli [COMMAND] [options]")
 	fmt.Println("Commands:")
+	fmt.Println("  new: 生成基于ezgin脚手架的模板项目")
 	fmt.Println("  run: 运行项目")
 	fmt.Println("Run 'ezgo-cli [COMMAND] -help' get options for command")
 }
