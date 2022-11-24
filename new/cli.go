@@ -140,6 +140,41 @@ func GetEzginCfg(projectName string) ezgin.Config {
 		Items: []string{"dev", "test", "prod"},
 	})
 
+	cfg.Nacos.Server = prompt.InputUi.RunWithLabel(promptExit, "请输入nacos服务地址")
+	cfg.Nacos.Nacos = prompt.InputUi.RunWithLabel(promptExit, "请输入nacos配置名称")
+	cfg.Nacos.Mysql = prompt.InputUi.RunWithLabel(promptExit, "请输入mysql配置名称")
+	cfg.Nacos.Mongo = prompt.InputUi.RunWithLabel(promptExit, "请输入mongo配置名称")
+	cfg.Nacos.Redis = prompt.InputUi.RunWithLabel(promptExit, "请输入redis配置名称")
+
+	//yml = strings.ReplaceAll(yml, "{gin-mode}", cfg.Gin.Mode)
+	//yml = strings.ReplaceAll(yml, "{gin-middleware}", cfg.Gin.Middleware)
+	//yml = strings.ReplaceAll(yml, "{gin-mw_logs-mongo_tag}", cfg.Gin.MongoTag)
+	//yml = strings.ReplaceAll(yml, "{gin-mw_logs-mongo_table}", cfg.Gin.MongoTable)
+	//yml = strings.ReplaceAll(yml, "{gin-kafka_topic}", cfg.Gin.KafkaTopic)
+
+	cfg.Gin.Mode = prompt.SelectUi.Run(promptExit, promptui.Select{
+		Label: "请选择gin运行模式",
+		Items: []string{"debug", "release"},
+	})
+	fmt.Println("开始配置gin中间件...")
+	fmt.Println("配置说明:")
+	fmt.Println("1. 请使用逗号分隔多个中间件")
+	fmt.Println("2. 为空默认使用所有中间件")
+	fmt.Println("3. 可选中间件: cors,trace,logs,xlang,recover")
+
+	cfg.Gin.Middleware = prompt.InputUi.Run(promptExit, promptui.Prompt{
+		Label: "请输入",
+	})
+
+	if cfg.Gin.Middleware == "" || strings.Contains(cfg.Gin.Middleware, "logs") {
+		fmt.Println("开始配置gin日志中间件...")
+		fmt.Println("配置说明:")
+		fmt.Println("1. 需要与Nacos.Yml.Mongo中配置文件名中的tag一致, 默认为Nacos.Yml.Mongo中第一个配置文件的tag, - 表示不开启")
+		cfg.Gin.MongoTag = prompt.InputUi.RunWithLabel(promptExit, "请输入mongo日志表的tag")
+		cfg.Gin.MongoTable = prompt.InputUi.RunWithLabel(promptExit, "请输入mongo日志表的名称")
+		cfg.Gin.KafkaTopic = prompt.InputUi.RunWithLabel(promptExit, "请输入kafka日志表的topic")
+	}
+
 	return cfg
 }
 
