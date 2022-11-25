@@ -53,12 +53,22 @@ func Exec() {
 	projectName := filepath.Base(ProjectDir)
 	fmt.Println("项目名称: ", projectName)
 
-	fmt.Println("清空项目目录...")
-	err = tools.File(ProjectDir).DeleteDirSubFiles()
+	_, err = os.Stat(ProjectDir)
 	if err != nil {
-		fmt.Println("清空项目目录失败: ", err.Error())
+		// 不存在则创建
+		err = os.MkdirAll(ProjectDir, os.ModePerm)
+		if err != nil {
+			fmt.Println("创建项目目录失败: ", err.Error())
+			return
+		}
+	} else {
+		fmt.Println("清空项目目录...")
+		err = tools.File(ProjectDir).DeleteDirSubFiles()
+		if err != nil {
+			fmt.Println("清空项目目录失败: ", err.Error())
+		}
+		fmt.Println("清空项目目录成功")
 	}
-	fmt.Println("清空项目目录成功")
 
 	isUseDefaultYml := prompt.InputUi.Run(promptExit, promptui.Prompt{
 		Label:     "是否生成默认程序yml配置?",
