@@ -6,6 +6,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path"
+	"strings"
 )
 
 func File(filePath string) fileT {
@@ -70,13 +71,16 @@ func (receiver fileT) unZipFile(file *zip.File, targetPath string) error {
 	return nil
 }
 
-// MoveDirSubFilesTo 移动目录下的所有文件到目标目录
-func (receiver fileT) MoveDirSubFilesTo(targetDir string) error {
+// MoveDirSubShowFilesTo 移动目录下的所有文件到目标目录
+func (receiver fileT) MoveDirSubShowFilesTo(targetDir string) error {
 	fis, err := ioutil.ReadDir(receiver.path)
 	if err != nil {
 		return err
 	}
 	for _, file := range fis {
+		if strings.HasPrefix(file.Name(), ".") {
+			continue
+		}
 		fromPath := path.Join(receiver.path, file.Name())
 		filePath := path.Join(targetDir, file.Name())
 		err = os.Rename(fromPath, filePath)

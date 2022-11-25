@@ -7,25 +7,29 @@ import (
 	"ezgo-cli/tools"
 	"flag"
 	"fmt"
-	"github.com/levigross/grequests"
 	"github.com/manifoldco/promptui"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 )
 
 const (
-	EZGinExampleGitUrl = "https://github.com/loebfly/ezgin-example/archive/refs/heads/main.zip"
+	exampleGit         = "https://gitee.com/loebfly/ezgin-example.git"
+	exampleYml         = "ezgin.yml"
+	exampleProjectName = "ezgin-example"
 )
 
 var (
-	ProjectDir string // 项目目录
+	ProjectDir   string // 项目目录
+	ProjectGroup string // 项目分组
+	UseTemplate  bool   // 项目模板
 )
 
 func Exec() {
 	cmdFlag := flag.NewFlagSet("new", flag.ExitOnError)
-	cmdFlag.StringVar(&ProjectDir, "dir", "", "项目目录")
+	cmdFlag.StringVar(&ProjectDir, "dir", "", "项目目录, 不可为当前目录")
+	cmdFlag.StringVar(&ProjectGroup, "group", "", "项目分组")
+	cmdFlag.BoolVar(&UseTemplate, "ue", false, "生成的项目是否带模块示例")
 	err := cmdFlag.Parse(os.Args[2:])
 	if err != nil {
 		fmt.Println("解析命令行参数失败: ", err.Error())
@@ -33,6 +37,13 @@ func Exec() {
 	}
 	if ProjectDir == "" {
 		fmt.Println("项目目录不能为空")
+		return
+	}
+
+	// 检查目录是否与当前目录相同
+	absPath, _ := filepath.Abs(os.Args[0])
+	if absPath == ProjectDir {
+		fmt.Println("项目目录不能为当前目录")
 		return
 	}
 
@@ -49,30 +60,43 @@ func Exec() {
 	}
 	fmt.Println("清空项目目录成功")
 
-	fmt.Println("准备项目模板...")
-	response, err := grequests.Get(EZGinExampleGitUrl, nil)
-	zipFile := ProjectDir + "/ezgin-example.zip"
-	if err := response.DownloadToFile(zipFile); err != nil {
-		fmt.Println("项目模板下载失败: ", err.Error())
+	isUseDefaultYml := prompt.InputUi.Run(promptExit, promptui.Prompt{
+		Label:     "是否生成默认程序yml配置?",
+		IsConfirm: true,
+		Default:   "Y",
+	})
+	ezCfg := ezgin.Config{
+		UseTemplate: UseTemplate,
+	}
+	if isUseDefaultYml == "Y" || isUseDefaultYml == "y" {
+		ezCfg = ezgin.GetDefaultConfig(ProjectGroup, projectName)
+	} else {
+		ezCfg = ezgin.GetCustomConfig(promptExit, projectName)
+	}
+
+	fmt.Println("正在准备项目模板...")
+	_, err = cmd.ExecInDir(ProjectDir, "git", "clone", exampleGit)
+	if err != nil {
+		fmt.Println("准备项目模板失败: ", err.Error())
 		return
 	}
-	fmt.Println("项目模板已准备")
-
-	// 解压项目模板
-	_ = tools.File(zipFile).UnzipTo(ProjectDir)
-
-	// 删除压缩包
-	_ = os.Remove(zipFile)
 
 	// 移动文件到项目目录
-	exampleDir := filepath.Join(ProjectDir, "ezgin-example-main")
-	_ = tools.File(exampleDir).MoveDirSubFilesTo(ProjectDir)
+	exampleDir := filepath.Join(ProjectDir, exampleProjectName)
+	_ = tools.File(exampleDir).MoveDirSubShowFilesTo(ProjectDir)
 
 	// 删除临时文件夹
 	_ = os.RemoveAll(exampleDir)
 
-	ezginCfg := GetEzginCfg(projectName)
-	WriteYml(ezginCfg)
+	fmt.Println("项目模板已准备")
+
+	fmt.Println("开始生成项目配置文件...")
+	WriteYml(ezCfg)
+	fmt.Println("项目配置文件已生成")
+
+	fmt.Println("正在修复项目引用...")
+	fixProject(ezCfg)
+	fmt.Println("项目引用修复完成")
 
 	// 执行 go mod init 命令
 	fmt.Println("开始执行 go mod init")
@@ -90,136 +114,290 @@ func Exec() {
 		os.Exit(0)
 	}
 	fmt.Println("go mod tidy 执行完毕")
-}
 
-func GetEzginCfg(projectName string) ezgin.Config {
-	fmt.Printf("准备 %s 的配置参数...", projectName)
-	var cfg = ezgin.Config{}
-	cfg.App.Name = projectName
+	fmt.Println("开始执行 swag init")
+	_, err = cmd.ExecInDirWithPrint(ProjectDir, "swag", "init")
+	fmt.Println("swag init 执行完毕")
 
-	cfg.App.Ip = prompt.InputUi.RunWithLabel(promptExit, "请输入项目IP地址")
-
-	cfg.App.Port = prompt.InputUi.Run(promptExit, promptui.Prompt{
-		Label: "请输入http端口号",
-		Validate: func(input string) error {
-			port := strings.TrimSpace(input)
-			if port != "" {
-				if _, err := strconv.Atoi(port); err != nil {
-					return fmt.Errorf("http端口号必须为数字")
-				}
-			}
-			return nil
-		},
-	}, true)
-
-	cfg.App.PortSsl = prompt.InputUi.Run(promptExit, promptui.Prompt{
-		Label: "请输入https端口号",
-		Validate: func(input string) error {
-			port := strings.TrimSpace(input)
-			if port != "" {
-				if _, err := strconv.Atoi(port); err != nil {
-					return fmt.Errorf("https端口号必须为数字")
-				}
-			}
-			return nil
-		},
-	}, true)
-
-	cfg.App.Cert = prompt.InputUi.RunWithLabel(promptExit, "请输入证书文件路径")
-	cfg.App.Key = prompt.InputUi.RunWithLabel(promptExit, "请输入私钥文件路径")
-	cfg.App.Debug = prompt.SelectUi.Run(promptExit, promptui.Select{
-		Label: "请选择是否开启debug模式",
-		Items: []string{"true", "false"},
-	})
-	cfg.App.Version = prompt.InputUi.Run(promptExit, promptui.Prompt{
-		Label:   "请输入项目版本号",
-		Default: "1.0.0",
-	})
-	cfg.App.Env = prompt.SelectUi.Run(promptExit, promptui.Select{
-		Label: "请选择项目运行环境",
-		Items: []string{"dev", "test", "prod"},
-	})
-
-	cfg.Nacos.Server = prompt.InputUi.RunWithLabel(promptExit, "请输入nacos服务地址")
-	cfg.Nacos.Nacos = prompt.InputUi.RunWithLabel(promptExit, "请输入nacos配置名称")
-	cfg.Nacos.Mysql = prompt.InputUi.RunWithLabel(promptExit, "请输入mysql配置名称")
-	cfg.Nacos.Mongo = prompt.InputUi.RunWithLabel(promptExit, "请输入mongo配置名称")
-	cfg.Nacos.Redis = prompt.InputUi.RunWithLabel(promptExit, "请输入redis配置名称")
-
-	//yml = strings.ReplaceAll(yml, "{gin-mode}", cfg.Gin.Mode)
-	//yml = strings.ReplaceAll(yml, "{gin-middleware}", cfg.Gin.Middleware)
-	//yml = strings.ReplaceAll(yml, "{gin-mw_logs-mongo_tag}", cfg.Gin.MongoTag)
-	//yml = strings.ReplaceAll(yml, "{gin-mw_logs-mongo_table}", cfg.Gin.MongoTable)
-	//yml = strings.ReplaceAll(yml, "{gin-kafka_topic}", cfg.Gin.KafkaTopic)
-
-	cfg.Gin.Mode = prompt.SelectUi.Run(promptExit, promptui.Select{
-		Label: "请选择gin运行模式",
-		Items: []string{"debug", "release"},
-	})
-	fmt.Println("开始配置gin中间件...")
-	fmt.Println("配置说明:")
-	fmt.Println("1. 请使用逗号分隔多个中间件")
-	fmt.Println("2. 为空默认使用所有中间件")
-	fmt.Println("3. 可选中间件: cors,trace,logs,xlang,recover")
-
-	cfg.Gin.Middleware = prompt.InputUi.Run(promptExit, promptui.Prompt{
-		Label: "请输入",
-	})
-
-	if cfg.Gin.Middleware == "" || strings.Contains(cfg.Gin.Middleware, "logs") {
-		fmt.Println("开始配置gin日志中间件...")
-		fmt.Println("配置说明:")
-		fmt.Println("1. 需要与Nacos.Yml.Mongo中配置文件名中的tag一致, 默认为Nacos.Yml.Mongo中第一个配置文件的tag, - 表示不开启")
-		cfg.Gin.MongoTag = prompt.InputUi.RunWithLabel(promptExit, "请输入mongo日志表的tag")
-		cfg.Gin.MongoTable = prompt.InputUi.RunWithLabel(promptExit, "请输入mongo日志表的名称")
-		cfg.Gin.KafkaTopic = prompt.InputUi.RunWithLabel(promptExit, "请输入kafka日志表的topic")
-	}
-
-	return cfg
+	fmt.Println("项目制作完毕")
+	os.Exit(0)
 }
 
 func WriteYml(cfg ezgin.Config) {
-
-	yml, _ := tools.File(ProjectDir + "/ezgin.yml").ReadString()
+	ymlPath := filepath.Join(ProjectDir, exampleYml)
+	yml, _ := tools.File(ymlPath).ReadString()
 
 	yml = strings.ReplaceAll(yml, "{app-name}", cfg.App.Name)
-	yml = strings.ReplaceAll(yml, "{app-ip}", cfg.App.Version)
-	yml = strings.ReplaceAll(yml, "{app-port}", cfg.App.Port)
-	yml = strings.ReplaceAll(yml, "{app-port-ssl}", cfg.App.PortSsl)
-	yml = strings.ReplaceAll(yml, "{app-cert}", cfg.App.Cert)
-	yml = strings.ReplaceAll(yml, "{app-key}", cfg.App.Key)
+	if cfg.App.Ip == "" {
+		// 删除 ip 配置
+		yml = strings.ReplaceAll(yml, "ip: {app-ip}", "")
+	} else {
+		yml = strings.ReplaceAll(yml, "{app-ip}", cfg.App.Ip)
+	}
+	if cfg.App.Port == "" || cfg.App.Port == "0" {
+		// 删除 port 配置
+		yml = strings.ReplaceAll(yml, "port: {app-port}", "")
+	} else {
+		yml = strings.ReplaceAll(yml, "{app-port}", cfg.App.Port)
+	}
+	if cfg.App.PortSsl == "" || cfg.App.PortSsl == "0" {
+		// 删除 port-ssl 配置
+		yml = strings.ReplaceAll(yml, "port-ssl: {app-port-ssl}", "")
+		yml = strings.ReplaceAll(yml, "cert: {app-cert}", "")
+		yml = strings.ReplaceAll(yml, "key: {app-key}", "")
+	} else {
+		yml = strings.ReplaceAll(yml, "{app-port-ssl}", cfg.App.PortSsl)
+		yml = strings.ReplaceAll(yml, "{app-cert}", cfg.App.Cert)
+		yml = strings.ReplaceAll(yml, "{app-key}", cfg.App.Key)
+	}
+
 	yml = strings.ReplaceAll(yml, "{app-debug}", cfg.App.Debug)
 	yml = strings.ReplaceAll(yml, "{app-version}", cfg.App.Version)
 	yml = strings.ReplaceAll(yml, "{app-env}", cfg.App.Env)
 
-	yml = strings.ReplaceAll(yml, "{nacos-server}", cfg.Nacos.Server)
-	yml = strings.ReplaceAll(yml, "{nacos-yml-nacos}", cfg.Nacos.Nacos)
-	yml = strings.ReplaceAll(yml, "{nacos-yml-mysql}", cfg.Nacos.Mysql)
-	yml = strings.ReplaceAll(yml, "{nacos-yml-mongo}", cfg.Nacos.Mongo)
-	yml = strings.ReplaceAll(yml, "{nacos-yml-redis}", cfg.Nacos.Redis)
-	yml = strings.ReplaceAll(yml, "{nacos-yml-kafka}", cfg.Nacos.Kafka)
+	if cfg.Nacos.Server == "" {
+		// 删除 nacos 配置
+		yml = strings.ReplaceAll(yml, "nacos:", "")
+		yml = strings.ReplaceAll(yml, "server: {nacos-server}", "")
+		yml = strings.ReplaceAll(yml, "yml:", "")
+		yml = strings.ReplaceAll(yml, "nacos: {nacos-yml-nacos}", "")
+		yml = strings.ReplaceAll(yml, "mysql: {nacos-yml-mysql}", "")
+		yml = strings.ReplaceAll(yml, "mongo: {nacos-yml-mongo}", "")
+		yml = strings.ReplaceAll(yml, "redis: {nacos-yml-redis}", "")
+		yml = strings.ReplaceAll(yml, "kafka: {nacos-yml-kafka}", "")
+	} else {
+		yml = strings.ReplaceAll(yml, "{nacos-server}", cfg.Nacos.Server)
+		yml = strings.ReplaceAll(yml, "{nacos-yml-nacos}", cfg.Nacos.Nacos)
+		yml = strings.ReplaceAll(yml, "{nacos-yml-mysql}", cfg.Nacos.Mysql)
+		yml = strings.ReplaceAll(yml, "{nacos-yml-mongo}", cfg.Nacos.Mongo)
+		yml = strings.ReplaceAll(yml, "{nacos-yml-redis}", cfg.Nacos.Redis)
+		yml = strings.ReplaceAll(yml, "{nacos-yml-kafka}", cfg.Nacos.Kafka)
+	}
 
 	yml = strings.ReplaceAll(yml, "{gin-mode}", cfg.Gin.Mode)
-	yml = strings.ReplaceAll(yml, "{gin-middleware}", cfg.Gin.Middleware)
-	yml = strings.ReplaceAll(yml, "{gin-mw_logs-mongo_tag}", cfg.Gin.MongoTag)
-	yml = strings.ReplaceAll(yml, "{gin-mw_logs-mongo_table}", cfg.Gin.MongoTable)
-	yml = strings.ReplaceAll(yml, "{gin-kafka_topic}", cfg.Gin.KafkaTopic)
+	if cfg.Gin.Middleware == "-" {
+		yml = strings.ReplaceAll(yml, "{gin-middleware}", "\"-\"")
+	} else if cfg.Gin.Middleware == "" {
+		// 删除 middleware 配置
+		yml = strings.ReplaceAll(yml, "middleware: {gin-middleware}", "")
+	} else {
+		yml = strings.ReplaceAll(yml, "{gin-middleware}", cfg.Gin.Middleware)
+	}
+	if cfg.Gin.MongoTag == "-" {
+		yml = strings.ReplaceAll(yml, "{gin-mw_logs-mongo_tag}", "\"-\"")
+	} else if cfg.Gin.MongoTag == "" {
+		// 删除 mongo-tag 配置
+		yml = strings.ReplaceAll(yml, "mongo_tag: {gin-mw_logs-mongo_tag}", "")
+	} else {
+		yml = strings.ReplaceAll(yml, "{gin-mw_logs-mongo_tag}", cfg.Gin.MongoTag)
+	}
 
-	yml = strings.ReplaceAll(yml, "{logs-level}", cfg.Logs.Level)
-	yml = strings.ReplaceAll(yml, "{logs-out}", cfg.Logs.Out)
-	yml = strings.ReplaceAll(yml, "{logs-file}", cfg.Logs.File)
+	if cfg.Gin.MongoTable == "" {
+		yml = strings.ReplaceAll(yml, "mongo_table: {gin-mw_logs-mongo_table}", "")
+	} else {
+		yml = strings.ReplaceAll(yml, "{gin-mw_logs-mongo_table}", cfg.Gin.MongoTable)
+	}
 
-	yml = strings.ReplaceAll(yml, "{i18n-app_name}", cfg.I18n.AppName)
-	yml = strings.ReplaceAll(yml, "{i18n-server_name}", cfg.I18n.ServerName)
-	yml = strings.ReplaceAll(yml, "{i18n-check_uri}", cfg.I18n.CheckUri)
-	yml = strings.ReplaceAll(yml, "{i18n-query_uri}", cfg.I18n.QueryUri)
-	yml = strings.ReplaceAll(yml, "{i18n-duration}", cfg.I18n.Duration)
+	if cfg.Gin.KafkaTopic == "-" {
+		yml = strings.ReplaceAll(yml, "{gin-mw_logs-kafka_topic}", "\"-\"")
+	} else {
+		yml = strings.ReplaceAll(yml, "{gin-mw_logs-kafka_topic}", cfg.Gin.KafkaTopic)
+	}
 
-	_ = tools.File(ProjectDir + "/ezgin.yml").WriteString(yml)
+	if cfg.Logs.Level == "-" {
+		yml = strings.ReplaceAll(yml, "{logs-level}", "\"-\"")
+		yml = strings.ReplaceAll(yml, "out: {logs-out}", "")
+		yml = strings.ReplaceAll(yml, "file: {logs-file}", "")
+	} else {
+		yml = strings.ReplaceAll(yml, "{logs-level}", cfg.Logs.Level)
+		yml = strings.ReplaceAll(yml, "{logs-out}", cfg.Logs.Out)
+		if cfg.Logs.File == "" {
+			// 删除 file 配置
+			yml = strings.ReplaceAll(yml, "file: {logs-file}", "")
+		} else {
+			yml = strings.ReplaceAll(yml, "{logs-file}", cfg.Logs.File)
+		}
+	}
+
+	if cfg.I18n.AppName == "-" {
+		yml = strings.ReplaceAll(yml, "{i18n-app_name}", "\"-\"")
+		yml = strings.ReplaceAll(yml, "server_name: {i18n-server_name}", "")
+		yml = strings.ReplaceAll(yml, "check_uri: {i18n-check_uri}", "")
+		yml = strings.ReplaceAll(yml, "query_uri: {i18n-query_uri}", "")
+		yml = strings.ReplaceAll(yml, "duration: {i18n-duration}", "")
+	} else {
+		if cfg.I18n.AppName == "" {
+			// 删除 i18n 配置
+			yml = strings.ReplaceAll(yml, "i18n:", "")
+			yml = strings.ReplaceAll(yml, "app_name: {i18n-app_name}", "")
+			yml = strings.ReplaceAll(yml, "server_name: {i18n-server_name}", "")
+			yml = strings.ReplaceAll(yml, "check_uri: {i18n-check_uri}", "")
+			yml = strings.ReplaceAll(yml, "query_uri: {i18n-query_uri}", "")
+			yml = strings.ReplaceAll(yml, "duration: {i18n-duration}", "")
+		} else {
+			yml = strings.ReplaceAll(yml, "{i18n-app_name}", cfg.I18n.AppName)
+			if cfg.I18n.ServerName == "" {
+				// 删除 server_name 配置
+				yml = strings.ReplaceAll(yml, "server_name: {i18n-server_name}", "")
+			} else {
+				yml = strings.ReplaceAll(yml, "{i18n-server_name}", cfg.I18n.ServerName)
+			}
+			if cfg.I18n.CheckUri == "" {
+				// 删除 check_uri 配置
+				yml = strings.ReplaceAll(yml, "check_uri: {i18n-check_uri}", "")
+			} else {
+				yml = strings.ReplaceAll(yml, "{i18n-check_uri}", cfg.I18n.CheckUri)
+			}
+			if cfg.I18n.QueryUri == "" {
+				// 删除 query_uri 配置
+				yml = strings.ReplaceAll(yml, "query_uri: {i18n-query_uri}", "")
+			} else {
+				yml = strings.ReplaceAll(yml, "{i18n-query_uri}", cfg.I18n.QueryUri)
+			}
+			if cfg.I18n.Duration == "" {
+				// 删除 duration 配置
+				yml = strings.ReplaceAll(yml, "duration: {i18n-duration}", "")
+			} else {
+				yml = strings.ReplaceAll(yml, "{i18n-duration}", cfg.I18n.Duration)
+			}
+		}
+	}
+
+	items := strings.Split(yml, "\n")
+	var newItems []string
+	for _, item := range items {
+		if strings.TrimSpace(item) == "" {
+			continue
+		}
+		newItems = append(newItems, item)
+	}
+
+	_ = tools.File(ymlPath).WriteString(strings.Join(newItems, "\n"))
 
 	// 重命名为cfg.App.Name
-	_ = os.Rename(ProjectDir+"/ezgin.yml", ProjectDir+"/"+cfg.App.Name+".yml")
-	fmt.Println(yml)
+	newYmlPath := filepath.Join(ProjectDir, cfg.App.Name+".yml")
+	_ = os.Rename(ymlPath, newYmlPath)
+}
+
+func fixProject(cfg ezgin.Config) {
+	// 修改main.go
+	mainPath := filepath.Join(ProjectDir, "main.go")
+	main, _ := tools.File(mainPath).ReadString()
+	main = strings.ReplaceAll(main, "{swag-title}", cfg.App.Name)
+	main = strings.ReplaceAll(main, "{swag-version}", cfg.App.Version)
+	main = strings.ReplaceAll(main, "{swag-description}", "基于ezgin框架，由ezgo-cli生成")
+	main = strings.ReplaceAll(main, exampleProjectName, cfg.App.Name)
+	_ = tools.File(mainPath).WriteString(main)
+
+	controllerTemplatePath := filepath.Join(ProjectDir, "controller", "template.go")
+	if cfg.UseTemplate {
+		// 修改controller/template.go
+		controllerTemplate, _ := tools.File(controllerTemplatePath).ReadString()
+		controllerTemplate = strings.ReplaceAll(controllerTemplate, exampleProjectName, cfg.App.Name)
+		_ = tools.File(controllerTemplatePath).WriteString(controllerTemplate)
+	} else {
+		_ = os.Remove(controllerTemplatePath)
+		enterPath := filepath.Join(ProjectDir, "controller", "enter.go")
+		enter, _ := tools.File(enterPath).ReadString()
+		enter = strings.ReplaceAll(enter, "var Template = new(templateController)", "")
+		_ = tools.File(enterPath).WriteString(enter)
+	}
+
+	if cfg.Nacos.Mongo == "" {
+		_ = os.RemoveAll(filepath.Join(ProjectDir, "mongo"))
+	} else {
+		mongoTemplatePath := filepath.Join(ProjectDir, "mongo", "template.go")
+		if cfg.UseTemplate {
+			// 修改mongo/template.go
+			mongoTemplate, _ := tools.File(mongoTemplatePath).ReadString()
+			mongoTemplate = strings.ReplaceAll(mongoTemplate, exampleProjectName, cfg.App.Name)
+			_ = tools.File(mongoTemplatePath).WriteString(mongoTemplate)
+		} else {
+			_ = os.Remove(mongoTemplatePath)
+			enterPath := filepath.Join(ProjectDir, "mongo", "enter.go")
+			enter, _ := tools.File(enterPath).ReadString()
+			enter = strings.ReplaceAll(enter, "var Template = new(templateMgo)", "")
+			_ = tools.File(enterPath).WriteString(enter)
+		}
+	}
+
+	if cfg.Nacos.Mysql == "" {
+		_ = os.RemoveAll(filepath.Join(ProjectDir, "mysql"))
+	} else {
+		mysqlTemplatePath := filepath.Join(ProjectDir, "mysql", "template.go")
+		if cfg.UseTemplate {
+			// 修改mysql/template.go
+			mysqlTemplate, _ := tools.File(mysqlTemplatePath).ReadString()
+			mysqlTemplate = strings.ReplaceAll(mysqlTemplate, exampleProjectName, cfg.App.Name)
+			_ = tools.File(mysqlTemplatePath).WriteString(mysqlTemplate)
+		} else {
+			_ = os.Remove(mysqlTemplatePath)
+			enterPath := filepath.Join(ProjectDir, "mysql", "enter.go")
+			enter, _ := tools.File(enterPath).ReadString()
+			enter = strings.ReplaceAll(enter, "var Template = new(templateDao)", "")
+			_ = tools.File(enterPath).WriteString(enter)
+		}
+	}
+
+	if cfg.Nacos.Nacos == "" {
+		_ = os.RemoveAll(filepath.Join(ProjectDir, "nacos"))
+	} else {
+		nacosTemplatePath := filepath.Join(ProjectDir, "nacos", "template.go")
+		if cfg.UseTemplate {
+			// 修改nacos/template.go
+			nacosTemplate, _ := tools.File(nacosTemplatePath).ReadString()
+			nacosTemplate = strings.ReplaceAll(nacosTemplate, exampleProjectName, cfg.App.Name)
+			_ = tools.File(nacosTemplatePath).WriteString(nacosTemplate)
+		} else {
+			_ = os.Remove(nacosTemplatePath)
+			enterPath := filepath.Join(ProjectDir, "nacos", "enter.go")
+			enter, _ := tools.File(enterPath).ReadString()
+			enter = strings.ReplaceAll(enter, "var Template = new(templateNacos)", "")
+			_ = tools.File(enterPath).WriteString(enter)
+		}
+	}
+
+	if cfg.Nacos.Redis == "" {
+		_ = os.RemoveAll(filepath.Join(ProjectDir, "redis"))
+	} else {
+		redisTemplatePath := filepath.Join(ProjectDir, "redis", "template.go")
+		if cfg.UseTemplate {
+			// 修改redis/template.go
+			redisTemplate, _ := tools.File(redisTemplatePath).ReadString()
+			redisTemplate = strings.ReplaceAll(redisTemplate, exampleProjectName, cfg.App.Name)
+			_ = tools.File(redisTemplatePath).WriteString(redisTemplate)
+		} else {
+			_ = os.Remove(redisTemplatePath)
+			enterPath := filepath.Join(ProjectDir, "redis", "enter.go")
+			enter, _ := tools.File(enterPath).ReadString()
+			enter = strings.ReplaceAll(enter, "var Template = new(templateRds)", "")
+			_ = tools.File(enterPath).WriteString(enter)
+		}
+	}
+	// 修改router/router.go
+	routerPath := filepath.Join(ProjectDir, "router", "router.go")
+	router, _ := tools.File(routerPath).ReadString()
+	if cfg.UseTemplate {
+		router = strings.ReplaceAll(router, exampleProjectName, cfg.App.Name)
+	} else {
+		router = strings.ReplaceAll(router, "\n\t\"ezgin-example/controller\"", "")
+		router = strings.ReplaceAll(router, "\n\t\t\"get\": controller.Template.Get,", "")
+	}
+	_ = tools.File(routerPath).WriteString(router)
+
+	// 修改service/template.go
+	serviceTemplatePath := filepath.Join(ProjectDir, "service", "template.go")
+	serviceTemplate, _ := tools.File(serviceTemplatePath).ReadString()
+	if cfg.UseTemplate {
+		serviceTemplate = strings.ReplaceAll(serviceTemplate, exampleProjectName, cfg.App.Name)
+	} else {
+		_ = os.Remove(controllerTemplatePath)
+		enterPath := filepath.Join(ProjectDir, "service", "enter.go")
+		enter, _ := tools.File(enterPath).ReadString()
+		enter = strings.ReplaceAll(enter, "var Template = new(templateService)", "")
+		_ = tools.File(enterPath).WriteString(enter)
+	}
+	_ = tools.File(serviceTemplatePath).WriteString(serviceTemplate)
 }
 
 func promptExit() {

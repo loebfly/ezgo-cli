@@ -89,7 +89,7 @@ func Exec() {
 				fmt.Printf("杀死旧进程失败: %s\n", err.Error())
 				os.Exit(0)
 			}
-			_, err = cmd.ExecWithPreCmd(printCmd, "xargs", "kill", "-9")
+			_, err = cmd.ExecWithPreCmd(printCmd, "xargs", "kill")
 			if err != nil {
 				fmt.Printf("杀死旧进程失败: %s\n", err.Error())
 				os.Exit(0)
