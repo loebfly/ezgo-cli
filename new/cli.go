@@ -26,7 +26,7 @@ var (
 )
 
 func Exec() {
-	cmdFlag := flag.NewFlagSet("new", flag.ExitOnError)
+	cmdFlag := flag.NewFlagSet(cmd.New, flag.ExitOnError)
 	cmdFlag.StringVar(&ProjectDir, "dir", "", "项目目录, 不可为当前目录")
 	cmdFlag.StringVar(&ProjectGroup, "group", "", "项目分组")
 	cmdFlag.BoolVar(&UseTemplate, "ue", false, "生成的项目是否带模块示例")

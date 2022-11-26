@@ -20,7 +20,7 @@ var (
 )
 
 func Exec() {
-	cmdFlag := flag.NewFlagSet("run", flag.ExitOnError)
+	cmdFlag := flag.NewFlagSet(cmd.Run, flag.ExitOnError)
 	cmdFlag.StringVar(&OptionsWorkDir, "workDir", "/opt/go/src/flamecloud.cn/", "项目根目录")
 	cmdFlag.StringVar(&OptionsLogDir, "logDir", "/opt/logs/", "日志根目录")
 	cmdFlag.BoolVar(&OptionsSwagInit, "swag", true, "是否生成swagger文档")

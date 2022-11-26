@@ -9,6 +9,14 @@ import (
 	"os/exec"
 )
 
+const (
+	New  = "new"
+	Run  = "run"
+	Idea = "idea"
+
+	IdeaDeploy = "deploy"
+)
+
 // ExecInDir 在指定目录下执行命令
 func ExecInDir(dir string, cmd string, args ...string) (*exec.Cmd, error) {
 	command := exec.Command(cmd, args...)

@@ -120,3 +120,9 @@ func (receiver fileT) ReadString() (string, error) {
 func (receiver fileT) WriteString(content string) error {
 	return ioutil.WriteFile(receiver.path, []byte(content), os.ModePerm)
 }
+
+// Exists 判断文件是否存在
+func (receiver fileT) Exists() bool {
+	_, err := os.Stat(receiver.path)
+	return err == nil || os.IsExist(err)
+}
