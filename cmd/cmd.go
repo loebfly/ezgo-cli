@@ -10,11 +10,8 @@ import (
 )
 
 const (
-	New  = "new"
-	Run  = "run"
-	Idea = "idea"
-
-	IdeaDeploy = "deploy"
+	New = "new"
+	Run = "run"
 )
 
 // ExecInDir 在指定目录下执行命令
