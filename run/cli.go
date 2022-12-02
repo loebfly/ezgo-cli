@@ -37,16 +37,6 @@ func Exec() {
 	projectName := getProjectName()
 
 	projectDir := fmt.Sprintf("%s%s", OptionsWorkDir, projectName)
-	if OptionsSwagInit {
-		fmt.Println("开始执行 swag init")
-		_, err := cmd.ExecInDirWithPrint(projectDir, "swag", "init")
-		if err != nil {
-			fmt.Printf("生成swag文档失败: %s", err.Error())
-			os.Exit(0)
-		}
-		fmt.Println("swag init 执行完毕")
-	}
-
 	if OptionsGoBuild {
 		_, err = os.Stat(projectDir + "/go.mod")
 		if err == nil || os.IsExist(err) {
@@ -58,6 +48,19 @@ func Exec() {
 			}
 			fmt.Println("go mod tidy 执行完毕")
 		}
+	}
+
+	if OptionsSwagInit {
+		fmt.Println("开始执行 swag init")
+		_, err := cmd.ExecInDirWithPrint(projectDir, "swag", "init")
+		if err != nil {
+			fmt.Printf("生成swag文档失败: %s", err.Error())
+			os.Exit(0)
+		}
+		fmt.Println("swag init 执行完毕")
+	}
+
+	if OptionsGoBuild {
 		fmt.Println("开始执行 go build")
 		_, err = cmd.ExecInDirWithPrint(projectDir, "go", "build")
 		if err != nil {
