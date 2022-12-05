@@ -19,6 +19,10 @@ var (
 )
 
 func Exec() {
+	if os.Args[2] == "-help" {
+		printHelp()
+		return
+	}
 	cmdFlag := flag.NewFlagSet(cmd.ModUpdate, flag.ExitOnError)
 	cmdFlag.StringVar(&OptionsWorkDir, "workDir", "", "项目根目录")
 	cmdFlag.StringVar(&OptionsPackages, "packages", "", "要升级的包(包含版本号), 例如: github.com/loebfly/ezgin@v0.1.36, 多个包用逗号分隔")
@@ -149,4 +153,11 @@ func getProjects() []string {
 	}
 	fmt.Printf("找到以下项目:\n%s\n ", strings.Join(projects, "\n"))
 	return projects
+}
+
+func printHelp() {
+	fmt.Println("用法: ezgo-cli mod [options]")
+	fmt.Println("options:")
+	fmt.Println("  upgrade")
+	fmt.Println("  ezgo-cli mod upgrade -help 查看用法")
 }
