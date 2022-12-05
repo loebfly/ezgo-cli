@@ -10,8 +10,10 @@ import (
 )
 
 const (
-	New = "new"
-	Run = "run"
+	New       = "new"
+	Run       = "run"
+	Mod       = "mod"
+	ModUpdate = "update"
 )
 
 // ExecInDir 在指定目录下执行命令
