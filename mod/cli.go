@@ -3,6 +3,7 @@ package mod
 import (
 	"ezgo-cli/cmd"
 	"ezgo-cli/mod/prompt"
+	"ezgo-cli/tools"
 	"flag"
 	"fmt"
 	"io/ioutil"
@@ -74,6 +75,7 @@ func Exec() {
 				fmt.Printf("读取go.mod文件失败: %s\n", err.Error())
 				continue
 			}
+
 			if !strings.Contains(string(goModContent), packageName) {
 				fmt.Printf("go.mod文件中未找到该包, 跳过\n")
 				continue
@@ -81,14 +83,28 @@ func Exec() {
 				fmt.Println("go.mod文件中找到该包, 替换中...")
 			}
 
-			// 执行go mod edit -require
-			_, err = cmd.ExecInDirWithPrint(filepath.Join(OptionsWorkDir, project), "go", "mod", "edit", "-require", upgradePackage)
-			if err != nil {
-				fmt.Printf("执行go mod edit -require失败: %s", err.Error())
-				continue
+			packageList := strings.Split(string(goModContent), "\n")
+			for i, packageItem := range packageList {
+				if packageItem == "require (" {
+					continue
+				}
+				if strings.Contains(packageItem, packageName) {
+					packageList[i] = fmt.Sprintf("%s %s", packageName, packageInfo[1])
+					isNeedTidy = true
+					break
+				}
+				if packageItem == ")" {
+					break
+				}
 			}
-			fmt.Println("go mod 替换该包成功")
-			isNeedTidy = true
+			if isNeedTidy {
+				err = tools.File(goModPath).WriteString(strings.Join(packageList, "\n"))
+				if err != nil {
+					fmt.Printf("写入go.mod文件失败: %s\n", err.Error())
+					return
+				}
+				fmt.Println("go mod 替换该包成功")
+			}
 		}
 		if isNeedTidy {
 			fmt.Println("go mod tidy中...")
