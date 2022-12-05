@@ -13,9 +13,8 @@ import (
 )
 
 var (
-	OptionsWorkDir     = ""     // -workDir 项目根目录
-	OptionsPackages    = ""     // 升级的包, 多个包用逗号分隔
-	upgradePackageList []string // -upgradePackage 升级的包
+	OptionsWorkDir  = "" // -workDir 项目根目录
+	OptionsPackages = "" // 升级的包, 多个包用逗号分隔
 )
 
 func Exec() {
@@ -39,7 +38,7 @@ func Exec() {
 		fmt.Println("要升级的包不能为空")
 		return
 	}
-	upgradePackageList = strings.Split(OptionsPackages, ",")
+	upgradePackageList := strings.Split(OptionsPackages, ",")
 	if len(upgradePackageList) == 0 {
 		fmt.Println("要升级的包不能为空")
 		return
