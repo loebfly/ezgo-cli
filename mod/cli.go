@@ -2,6 +2,7 @@ package mod
 
 import (
 	"ezgo-cli/cmd"
+	"ezgo-cli/mod/prompt"
 	"flag"
 	"fmt"
 	"io/ioutil"
@@ -39,29 +40,16 @@ func Exec() {
 		return
 	}
 	fmt.Println("项目根目录: ", OptionsWorkDir)
-	fmt.Println("要升级的包: ", OptionsPackages)
+	fmt.Printf("要升级的包:\n%s\n", strings.Join(upgradePackageList, " \n"))
 
 	// 找项目
-	dirFiles, err := ioutil.ReadDir(OptionsWorkDir)
-	if err != nil {
-		fmt.Printf("读取项目目录失败: %s", err.Error())
-		os.Exit(0)
-	}
-
-	var projects []string
-	for _, dirFile := range dirFiles {
-		if dirFile.IsDir() {
-			projects = append(projects, dirFile.Name())
-		}
-	}
-
-	if len(projects) == 0 {
-		fmt.Println("项目根目录下没有项目")
-		os.Exit(0)
-	}
+	var projects = getProjects()
 
 	// 找go.mod
 	for _, project := range projects {
+		if !prompt.SelectUi.IsAgree(fmt.Sprintf("是否升级项目'%s'?", project)) {
+			continue
+		}
 		goModPath := filepath.Join(OptionsWorkDir, project, "go.mod")
 		_, err := os.Stat(goModPath)
 		if err != nil {
@@ -112,4 +100,37 @@ func Exec() {
 			fmt.Println("go mod tidy成功")
 		}
 	}
+}
+
+func getProjects() []string {
+	keyword := prompt.InputUi.SearchKeyword()
+
+	if keyword != "" {
+		fmt.Printf("正在匹配包含'%s'的项目\n", keyword)
+	}
+
+	dirFiles, err := ioutil.ReadDir(OptionsWorkDir)
+	if err != nil {
+		fmt.Printf("读取项目目录失败: %s", err.Error())
+		os.Exit(0)
+	}
+
+	var projects []string
+	for _, dirFile := range dirFiles {
+		if keyword != "" && !strings.Contains(dirFile.Name(), keyword) {
+			continue
+		}
+		if dirFile.IsDir() {
+			projects = append(projects, dirFile.Name())
+		}
+	}
+
+	if len(projects) == 0 {
+		if prompt.SelectUi.IsAgree("未找到匹配的项目, 是否重新搜索?") {
+			return getProjects()
+		}
+		os.Exit(0)
+	}
+	fmt.Printf("找到以下项目:\n%s\n ", strings.Join(projects, "\n"))
+	return projects
 }
