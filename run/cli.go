@@ -13,35 +13,54 @@ import (
 )
 
 var (
-	OptionsWorkDir  = ""   // -workDir 项目根目录
-	OptionsLogDir   = ""   // -logDir 日志目录
-	OptionsSwagInit = true // -swagInit 是否生成swagger文档
-	OptionsGoBuild  = true // -build 是否编译
+	OptionsWorkDir   = ""     // -workDir 项目根目录
+	OptionsLogDir    = ""     // -logDir 日志目录
+	OptionsSwagInit  = "true" // -swagInit 是否初始化swagger
+	OptionsGoBuild   = "true" // -build 是否编译
+	OptionsGoVersion = "1.17" // -goVersion 指定go版本
+	OptionsGroup     = ""     // -group 指定项目组
 )
 
 func Exec() {
 	cmdFlag := flag.NewFlagSet(cmd.Run, flag.ExitOnError)
 	cmdFlag.StringVar(&OptionsWorkDir, "workDir", "/opt/go/src/flamecloud.cn/", "项目根目录")
 	cmdFlag.StringVar(&OptionsLogDir, "logDir", "/opt/logs/", "日志根目录")
-	cmdFlag.BoolVar(&OptionsSwagInit, "swag", true, "是否生成swagger文档")
-	cmdFlag.BoolVar(&OptionsGoBuild, "build", true, "是否要编译项目")
+	cmdFlag.StringVar(&OptionsSwagInit, "swag", "true", "是否生成swagger文档")
+	cmdFlag.StringVar(&OptionsGoBuild, "build", "true", "是否要编译项目")
 	err := cmdFlag.Parse(os.Args[2:])
 	if err != nil {
 		fmt.Println("解析命令行参数失败: ", err.Error())
 		return
 	}
 
+	OptionsGroup = prompt.SelectUi.ProjectGroup()
+	if OptionsGroup != "无分组" {
+		OptionsWorkDir = OptionsWorkDir + OptionsGroup + "/"
+	}
+
 	fmt.Println("项目根目录: ", OptionsWorkDir)
 	fmt.Println("日志根目录: ", OptionsLogDir)
 
+	// 选择Go版本
+	OptionsGoVersion = prompt.SelectUi.GoVersion()
+
+	// 设置GO_VERSION=1.19
+	fmt.Printf("设置GO_VERSION=%s\n", OptionsGoVersion)
+	err = os.Setenv("GO_VERSION", OptionsGoVersion)
+	if err != nil {
+		fmt.Printf("设置GO_VERSION失败: %s", err.Error())
+		os.Exit(0)
+		return
+	}
 	projectName := getProjectName()
 
 	projectDir := fmt.Sprintf("%s%s", OptionsWorkDir, projectName)
-	if OptionsGoBuild {
+
+	if OptionsGoBuild == "true" {
 		_, err = os.Stat(projectDir + "/go.mod")
 		if err == nil || os.IsExist(err) {
 			fmt.Println("开始执行 go mod tidy")
-			_, err := cmd.ExecInDirWithPrint(projectDir, "go", "mod", "tidy", "-compat=1.17")
+			_, err := cmd.ExecInDirWithPrint(projectDir, "go", "mod", "tidy", "-compat="+OptionsGoVersion)
 			if err != nil {
 				fmt.Printf("go mod tidy 执行失败: %s\n", err.Error())
 				os.Exit(0)
@@ -50,23 +69,31 @@ func Exec() {
 		}
 	}
 
-	if OptionsSwagInit {
+	if OptionsSwagInit == "true" {
 		fmt.Println("开始执行 swag init")
-		_, err := cmd.ExecInDirWithPrint(projectDir, "swag", "init")
-		if err != nil {
-			fmt.Printf("生成swag文档失败: %s", err.Error())
-			os.Exit(0)
+		if OptionsGoVersion == "1.17" {
+			_, err := cmd.ExecInDirWithPrint(projectDir, "swag", "init")
+			if err != nil {
+				fmt.Printf("生成swag文档失败: %s", err.Error())
+			}
+		} else {
+			//_, err := cmd.ExecInDirWithPrint(projectDir, "swag", "init", "--parseDependency", "--parseInternal")
+			//if err != nil {
+			//	fmt.Printf("生成swag文档失败: %s", err.Error())
+			//}
 		}
+
 		fmt.Println("swag init 执行完毕")
 	}
 
-	if OptionsGoBuild {
+	if OptionsGoBuild == "true" {
 		fmt.Println("开始执行 go build")
 		_, err = cmd.ExecInDirWithPrint(projectDir, "go", "build")
 		if err != nil {
 			fmt.Printf("编译项目失败: %s\n", err.Error())
 			os.Exit(0)
 		}
+
 		fmt.Println("go build 执行完毕")
 	}
 

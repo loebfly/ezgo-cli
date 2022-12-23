@@ -53,3 +53,35 @@ func (receiver selectPromptUi) IsAgree(label string) bool {
 	fmt.Println("您选择的是:", result)
 	return result == "是"
 }
+
+func (receiver selectPromptUi) GoVersion() string {
+	prompt := promptui.Select{
+		Label:    "请选择Go版本",
+		Items:    []string{"1.17", "1.19"},
+		HideHelp: true,
+		Size:     10,
+	}
+	_, result, err := prompt.Run()
+	if err != nil && err.Error() == "^C" {
+		os.Exit(1)
+	}
+	fmt.Println(prompt.Label)
+	fmt.Println("您选择的是:", result)
+	return result
+}
+
+func (receiver selectPromptUi) ProjectGroup() string {
+	prompt := promptui.Select{
+		Label:    "请选择项目组",
+		Items:    []string{"无分组", "opencloud", "cmp"},
+		HideHelp: true,
+		Size:     10,
+	}
+	_, result, err := prompt.Run()
+	if err != nil && err.Error() == "^C" {
+		os.Exit(1)
+	}
+	fmt.Println(prompt.Label)
+	fmt.Println("您选择的是:", result)
+	return result
+}
