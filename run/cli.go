@@ -45,13 +45,20 @@ func Exec() {
 	OptionsGoVersion = prompt.SelectUi.GoVersion()
 
 	// 设置GO_VERSION=1.19
-	fmt.Printf("设置GO_VERSION=%s\n", OptionsGoVersion)
-	err = os.Setenv("GO_VERSION", OptionsGoVersion)
+	_, err = cmd.ExecInDir("", "rm", "-rf", "/usr/local/go")
 	if err != nil {
 		fmt.Printf("设置GO_VERSION失败: %s", err.Error())
 		os.Exit(0)
 		return
 	}
+	_, err = cmd.ExecInDir("", "ln", "-sf", "go"+OptionsGoVersion, "/usr/local/go")
+	if err != nil {
+		fmt.Printf("设置GO_VERSION失败: %s", err.Error())
+		os.Exit(0)
+		return
+	}
+	fmt.Printf("设置GO %s版本成功", OptionsGoVersion)
+
 	projectName := getProjectName()
 
 	projectDir := fmt.Sprintf("%s%s", OptionsWorkDir, projectName)
