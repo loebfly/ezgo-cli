@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"ezgo-cli/cmd"
 	"ezgo-cli/run/prompt"
+	"ezgo-cli/tools"
 	"flag"
 	"fmt"
 	"io/ioutil"
@@ -41,27 +42,32 @@ func Exec() {
 	fmt.Println("项目根目录: ", OptionsWorkDir)
 	fmt.Println("日志根目录: ", OptionsLogDir)
 
-	// 选择Go版本
-	OptionsGoVersion = prompt.SelectUi.GoVersion()
-
-	// 设置GO_VERSION=1.19
-	_, err = cmd.ExecInDir("", "rm", "-rf", "/usr/local/go")
-	if err != nil {
-		fmt.Printf("设置GO_VERSION失败: %s", err.Error())
-		os.Exit(0)
-		return
-	}
-	_, err = cmd.ExecInDir("", "ln", "-sf", "go"+OptionsGoVersion, "/usr/local/go")
-	if err != nil {
-		fmt.Printf("设置GO_VERSION失败: %s", err.Error())
-		os.Exit(0)
-		return
-	}
-	fmt.Printf("设置GO %s版本成功", OptionsGoVersion)
-
 	projectName := getProjectName()
 
 	projectDir := fmt.Sprintf("%s%s", OptionsWorkDir, projectName)
+
+	_, err = os.Stat(projectDir + "/go.mod")
+	if err == nil || os.IsExist(err) {
+		// 读取go.mod文件
+		content, err := tools.File(projectDir + "/go.mod").ReadString()
+		if err != nil {
+			fmt.Println("读取go.mod文件失败: ", err.Error())
+			os.Exit(0)
+		}
+		OptionsGoVersion = "1.17"
+		if strings.Contains(content, "go 1.17") {
+			OptionsGoVersion = "1.17"
+		} else if strings.Contains(content, "go 1.19") {
+			OptionsGoVersion = "1.19"
+		}
+		fmt.Printf("读取到项目go版本: %s\n", OptionsGoVersion)
+		// 设置go版本
+		setGoVersion()
+	} else {
+		// 选择Go版本
+		OptionsGoVersion = prompt.SelectUi.GoVersion()
+		setGoVersion()
+	}
 
 	if OptionsGoBuild == "true" {
 		_, err = os.Stat(projectDir + "/go.mod")
@@ -77,20 +83,21 @@ func Exec() {
 	}
 
 	if OptionsSwagInit == "true" {
-		fmt.Println("开始执行 swag init")
+
 		if OptionsGoVersion == "1.17" {
+			fmt.Println("开始执行 swag init")
 			_, err := cmd.ExecInDirWithPrint(projectDir, "swag", "init")
 			if err != nil {
 				fmt.Printf("生成swag文档失败: %s", err.Error())
 			}
+			fmt.Println("swag init 执行完毕")
 		} else {
-			//_, err := cmd.ExecInDirWithPrint(projectDir, "swag", "init", "--parseDependency", "--parseInternal")
-			//if err != nil {
-			//	fmt.Printf("生成swag文档失败: %s", err.Error())
-			//}
+			_, err := cmd.ExecInDirWithPrint(projectDir, "swag", "init", "--pd", "--parseInternal")
+			if err != nil {
+				fmt.Printf("生成swag文档失败: %s", err.Error())
+			}
 		}
 
-		fmt.Println("swag init 执行完毕")
 	}
 
 	if OptionsGoBuild == "true" {
@@ -238,4 +245,20 @@ func getOldPidCmd(projectName, ymlName string) *exec.Cmd {
 		return nil
 	}
 	return grepCmd
+}
+
+func setGoVersion() {
+	_, err := cmd.ExecInDir("", "rm", "-rf", "/usr/local/go")
+	if err != nil {
+		fmt.Printf("设置GO_VERSION失败: %s", err.Error())
+		os.Exit(0)
+		return
+	}
+	_, err = cmd.ExecInDir("", "ln", "-sf", "go"+OptionsGoVersion, "/usr/local/go")
+	if err != nil {
+		fmt.Printf("设置GO_VERSION失败: %s", err.Error())
+		os.Exit(0)
+		return
+	}
+	fmt.Printf("设置GO %s版本成功\n", OptionsGoVersion)
 }
