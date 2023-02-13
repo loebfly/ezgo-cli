@@ -35,7 +35,7 @@ func Exec() {
 	}
 
 	OptionsGroup = prompt.SelectUi.ProjectGroup()
-	if OptionsGroup != "无分组" {
+	if OptionsGroup != "root" {
 		OptionsWorkDir = OptionsWorkDir + OptionsGroup + "/"
 	}
 
