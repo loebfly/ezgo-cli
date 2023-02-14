@@ -14,20 +14,23 @@ import (
 )
 
 var (
+	// CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build
 	OptionsWorkDir   = ""     // -workDir 项目根目录
 	OptionsLogDir    = ""     // -logDir 日志目录
-	OptionsSwagInit  = "true" // -swagInit 是否初始化swagger
-	OptionsGoBuild   = "true" // -build 是否编译
+	OptionsSwagInit  = "y"    // -swagInit 是否初始化swagger
+	OptionsGoBuild   = "y"    // -build 是否编译
 	OptionsGoVersion = "1.17" // -goVersion 指定go版本
 	OptionsGroup     = ""     // -group 指定项目组
+	OptionsBatch     = "n"    // -batch 是否批量执行
 )
 
 func Exec() {
 	cmdFlag := flag.NewFlagSet(cmd.Run, flag.ExitOnError)
 	cmdFlag.StringVar(&OptionsWorkDir, "workDir", "/opt/go/src/flamecloud.cn/", "项目根目录")
 	cmdFlag.StringVar(&OptionsLogDir, "logDir", "/opt/logs/", "日志根目录")
-	cmdFlag.StringVar(&OptionsSwagInit, "swag", "true", "是否生成swagger文档")
-	cmdFlag.StringVar(&OptionsGoBuild, "build", "true", "是否要编译项目")
+	cmdFlag.StringVar(&OptionsSwagInit, "swag", "y", "是否生成swagger文档")
+	cmdFlag.StringVar(&OptionsGoBuild, "build", "y", "是否要编译项目")
+	cmdFlag.StringVar(&OptionsBatch, "batch", "n", "是否要批量操作")
 	err := cmdFlag.Parse(os.Args[2:])
 	if err != nil {
 		fmt.Println("解析命令行参数失败: ", err.Error())
@@ -42,11 +45,26 @@ func Exec() {
 	fmt.Println("项目根目录: ", OptionsWorkDir)
 	fmt.Println("日志根目录: ", OptionsLogDir)
 
-	projectName := getProjectName()
+	if OptionsBatch == "y" {
+		// 批量执行
+		var projectNames = getAllProjectNameForWorkDir()
+		for len(projectNames) > 0 {
+			projectName := projectNames[0]
+			if prompt.SelectUi.IsAgree("是否要执行(" + projectName + ")项目?") {
+				startRunFlow(projectName)
+			}
+			projectNames = projectNames[1:]
+		}
+	} else {
+		projectName := getProjectName()
+		startRunFlow(projectName)
+	}
+}
 
+func startRunFlow(projectName string) {
 	projectDir := fmt.Sprintf("%s%s", OptionsWorkDir, projectName)
 
-	_, err = os.Stat(projectDir + "/go.mod")
+	_, err := os.Stat(projectDir + "/go.mod")
 	if err == nil || os.IsExist(err) {
 		// 读取go.mod文件
 		content, err := tools.File(projectDir + "/go.mod").ReadString()
@@ -69,7 +87,7 @@ func Exec() {
 		setGoVersion()
 	}
 
-	if OptionsGoBuild == "true" {
+	if OptionsGoBuild == "y" {
 		_, err = os.Stat(projectDir + "/go.mod")
 		if err == nil || os.IsExist(err) {
 			fmt.Println("开始执行 go mod tidy")
@@ -82,7 +100,7 @@ func Exec() {
 		}
 	}
 
-	if OptionsSwagInit == "true" {
+	if OptionsSwagInit == "y" {
 
 		if OptionsGoVersion == "1.17" {
 			fmt.Println("开始执行 swag init")
@@ -100,7 +118,7 @@ func Exec() {
 
 	}
 
-	if OptionsGoBuild == "true" {
+	if OptionsGoBuild == "y" {
 		fmt.Println("开始执行 go build")
 		_, err = cmd.ExecInDirWithPrint(projectDir, "go", "build")
 		if err != nil {
@@ -162,6 +180,24 @@ func Exec() {
 	fmt.Printf("查看日志: tail -f -n200 %s%s.$(date +%%F).log\n", OptionsLogDir, projectName)
 	fmt.Printf("查看out: tail -f -n200 %s%s.out\n", OptionsLogDir, projectName)
 	fmt.Printf("查看进程: ps -ef | grep %s\n", projectName)
+}
+
+// getAllProjectNameForWorkDir 获取项目目录下的所有项目名称
+func getAllProjectNameForWorkDir() []string {
+	dirFiles, err := ioutil.ReadDir(OptionsWorkDir)
+	if err != nil {
+		fmt.Printf("读取项目目录失败: %s", err.Error())
+		os.Exit(0)
+	}
+
+	var projects []string
+	for _, dirFile := range dirFiles {
+		if dirFile.IsDir() {
+			projects = append(projects, dirFile.Name())
+		}
+	}
+
+	return projects
 }
 
 func getProjectName() string {
