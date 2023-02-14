@@ -55,7 +55,7 @@ func Exec() {
 			continue
 		}
 		goModPath := filepath.Join(OptionsWorkDir, project, "go.mod")
-		_, err := os.Stat(goModPath)
+		_, err = os.Stat(goModPath)
 		if err != nil {
 			fmt.Printf("项目: %s, 没有go.mod文件, 跳过", project)
 			continue
@@ -111,7 +111,10 @@ func Exec() {
 		}
 		if isNeedTidy {
 			fmt.Println("go mod tidy中...")
-			_, err = cmd.ExecInDirWithPrint(filepath.Join(OptionsWorkDir, project), "go", "mod", "tidy", "-compat=1.17")
+			projectDir := filepath.Join(OptionsWorkDir, project)
+			goVersion := getProjectGoVersion(projectDir)
+			setGoVersion(goVersion)
+			_, err = cmd.ExecInDirWithPrint(projectDir, "go", "mod", "tidy", "-compat="+goVersion)
 			if err != nil {
 				fmt.Printf("执行go mod tidy失败: %s", err.Error())
 				continue
@@ -152,6 +155,38 @@ func getProjects() []string {
 	}
 	fmt.Printf("找到以下项目:\n%s\n ", strings.Join(projects, "\n"))
 	return projects
+}
+
+func getProjectGoVersion(projectDir string) string {
+	// 读取go.mod文件
+	content, err := tools.File(projectDir + "/go.mod").ReadString()
+	if err != nil {
+		fmt.Println("读取go.mod文件失败: ", err.Error())
+		os.Exit(0)
+	}
+	goVersion := "1.17"
+	if strings.Contains(content, "go 1.17") {
+		goVersion = "1.17"
+	} else if strings.Contains(content, "go 1.19") {
+		goVersion = "1.19"
+	}
+	return goVersion
+}
+
+func setGoVersion(version string) {
+	_, err := cmd.ExecInDir("", "rm", "-rf", "/usr/local/go")
+	if err != nil {
+		fmt.Printf("设置GO_VERSION失败: %s", err.Error())
+		os.Exit(0)
+		return
+	}
+	_, err = cmd.ExecInDir("", "ln", "-sf", "go"+version, "/usr/local/go")
+	if err != nil {
+		fmt.Printf("设置GO_VERSION失败: %s", err.Error())
+		os.Exit(0)
+		return
+	}
+	fmt.Printf("设置GO %s版本成功\n", version)
 }
 
 func printHelp() {

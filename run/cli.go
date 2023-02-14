@@ -48,11 +48,14 @@ func Exec() {
 	if OptionsBatch == "y" {
 		// 批量执行
 		var projectNames = getAllProjectNameForWorkDir()
-		for len(projectNames) > 0 {
-			projectName := projectNames[0]
-			if prompt.SelectUi.IsAgree("是否要执行(" + projectName + ")项目?") {
-				startRunFlow(projectName)
+		var startProjectNames = make([]string, 0)
+		for _, projectName := range projectNames {
+			if prompt.SelectUi.IsAgree("是否要选择(" + projectName + ")项目?") {
+				startProjectNames = append(startProjectNames, projectName)
 			}
+		}
+		for len(startProjectNames) > 0 {
+			startRunFlow(projectNames[0])
 			projectNames = projectNames[1:]
 		}
 	} else {
@@ -66,25 +69,14 @@ func startRunFlow(projectName string) {
 
 	_, err := os.Stat(projectDir + "/go.mod")
 	if err == nil || os.IsExist(err) {
-		// 读取go.mod文件
-		content, err := tools.File(projectDir + "/go.mod").ReadString()
-		if err != nil {
-			fmt.Println("读取go.mod文件失败: ", err.Error())
-			os.Exit(0)
-		}
-		OptionsGoVersion = "1.17"
-		if strings.Contains(content, "go 1.17") {
-			OptionsGoVersion = "1.17"
-		} else if strings.Contains(content, "go 1.19") {
-			OptionsGoVersion = "1.19"
-		}
+		OptionsGoVersion = getProjectGoVersion(projectDir)
 		fmt.Printf("读取到项目go版本: %s\n", OptionsGoVersion)
 		// 设置go版本
-		setGoVersion()
+		setGoVersion(OptionsGoVersion)
 	} else {
 		// 选择Go版本
 		OptionsGoVersion = prompt.SelectUi.GoVersion()
-		setGoVersion()
+		setGoVersion(OptionsGoVersion)
 	}
 
 	if OptionsGoBuild == "y" {
@@ -192,8 +184,11 @@ func getAllProjectNameForWorkDir() []string {
 
 	var projects []string
 	for _, dirFile := range dirFiles {
+		// 是目录且目录下包含mod文件
 		if dirFile.IsDir() {
-			projects = append(projects, dirFile.Name())
+			if _, err = os.Stat(OptionsWorkDir + "/" + dirFile.Name() + "/go.mod"); err == nil {
+				projects = append(projects, dirFile.Name())
+			}
 		}
 	}
 
@@ -283,18 +278,34 @@ func getOldPidCmd(projectName, ymlName string) *exec.Cmd {
 	return grepCmd
 }
 
-func setGoVersion() {
+func getProjectGoVersion(projectDir string) string {
+	// 读取go.mod文件
+	content, err := tools.File(projectDir + "/go.mod").ReadString()
+	if err != nil {
+		fmt.Println("读取go.mod文件失败: ", err.Error())
+		os.Exit(0)
+	}
+	goVersion := "1.17"
+	if strings.Contains(content, "go 1.17") {
+		goVersion = "1.17"
+	} else if strings.Contains(content, "go 1.19") {
+		goVersion = "1.19"
+	}
+	return goVersion
+}
+
+func setGoVersion(version string) {
 	_, err := cmd.ExecInDir("", "rm", "-rf", "/usr/local/go")
 	if err != nil {
 		fmt.Printf("设置GO_VERSION失败: %s", err.Error())
 		os.Exit(0)
 		return
 	}
-	_, err = cmd.ExecInDir("", "ln", "-sf", "go"+OptionsGoVersion, "/usr/local/go")
+	_, err = cmd.ExecInDir("", "ln", "-sf", "go"+version, "/usr/local/go")
 	if err != nil {
 		fmt.Printf("设置GO_VERSION失败: %s", err.Error())
 		os.Exit(0)
 		return
 	}
-	fmt.Printf("设置GO %s版本成功\n", OptionsGoVersion)
+	fmt.Printf("设置GO %s版本成功\n", version)
 }
