@@ -55,8 +55,8 @@ func Exec() {
 			}
 		}
 		for len(startProjectNames) > 0 {
-			startRunFlow(projectNames[0])
-			projectNames = projectNames[1:]
+			startRunFlow(startProjectNames[0])
+			startProjectNames = startProjectNames[1:]
 		}
 	} else {
 		projectName := getProjectName()
@@ -65,6 +65,7 @@ func Exec() {
 }
 
 func startRunFlow(projectName string) {
+	fmt.Printf("开始执行项目(%s)的流程\n", projectName)
 	projectDir := fmt.Sprintf("%s%s", OptionsWorkDir, projectName)
 
 	_, err := os.Stat(projectDir + "/go.mod")
