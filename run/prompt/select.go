@@ -73,7 +73,7 @@ func (receiver selectPromptUi) GoVersion() string {
 func (receiver selectPromptUi) ProjectGroup() string {
 	prompt := promptui.Select{
 		Label:    "请选择项目组",
-		Items:    []string{"root", "opencloud", "ecloud"},
+		Items:    []string{"root", "opencloud", "ecloud", "zeus"},
 		HideHelp: true,
 		Size:     10,
 	}
