@@ -38,12 +38,20 @@ func Exec() {
 	}
 
 	OptionsGroup = prompt.SelectUi.ProjectGroup()
-	if OptionsGroup != "root" {
+	if OptionsGroup != "root" && OptionsGroup != "api-gate" {
 		OptionsWorkDir = OptionsWorkDir + OptionsGroup + "/"
 	}
 
 	fmt.Println("项目根目录: ", OptionsWorkDir)
 	fmt.Println("日志根目录: ", OptionsLogDir)
+
+	if OptionsGroup == "api-gate" {
+		OptionsBatch = "n"
+		OptionsSwagInit = "n"
+		OptionsGoBuild = "n"
+		startRunFlow("api-gate")
+		return
+	}
 
 	if OptionsBatch == "y" {
 		// 批量执行
