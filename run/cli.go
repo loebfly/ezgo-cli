@@ -22,6 +22,7 @@ var (
 	OptionsGoVersion = "1.17" // -goVersion 指定go版本
 	OptionsGroup     = ""     // -group 指定项目组
 	OptionsBatch     = "n"    // -batch 是否批量执行
+	OptionsKeyword   = ""     // -keyword 指定项目关键字
 )
 
 func Exec() {
@@ -31,6 +32,7 @@ func Exec() {
 	cmdFlag.StringVar(&OptionsSwagInit, "swag", "y", "是否生成swagger文档")
 	cmdFlag.StringVar(&OptionsGoBuild, "build", "y", "是否要编译项目")
 	cmdFlag.StringVar(&OptionsBatch, "batch", "n", "是否要批量操作")
+	cmdFlag.StringVar(&OptionsKeyword, "keyword", "", "指定项目关键字")
 	err := cmdFlag.Parse(os.Args[2:])
 	if err != nil {
 		fmt.Println("解析命令行参数失败: ", err.Error())
@@ -116,12 +118,11 @@ func startRunFlow(projectName string) {
 				fmt.Printf("生成swag文档失败: %s", err.Error())
 			}
 		}
-
 	}
 
 	if OptionsGoBuild == "y" {
 		fmt.Println("开始执行 go build")
-		_, err = cmd.ExecInDirWithPrint(projectDir, "go", "build")
+		_, err := cmd.ExecInDirWithPrint(projectDir, "go", "build")
 		if err != nil {
 			fmt.Printf("编译项目失败: %s\n", err.Error())
 			os.Exit(0)
@@ -193,6 +194,9 @@ func getAllProjectNameForWorkDir() []string {
 
 	var projects []string
 	for _, dirFile := range dirFiles {
+		if OptionsKeyword != "" && !strings.Contains(dirFile.Name(), OptionsKeyword) {
+			continue
+		}
 		// 是目录且目录下包含mod文件
 		if dirFile.IsDir() {
 			if _, err = os.Stat(OptionsWorkDir + "/" + dirFile.Name() + "/go.mod"); err == nil {
@@ -205,7 +209,12 @@ func getAllProjectNameForWorkDir() []string {
 }
 
 func getProjectName() string {
-	keyword := prompt.InputUi.SearchKeyword()
+	keyword := ""
+	if OptionsKeyword != "" {
+		keyword = OptionsKeyword
+	} else {
+		keyword = prompt.InputUi.SearchKeyword()
+	}
 
 	if keyword != "" {
 		fmt.Printf("正在匹配包含'%s'的项目\n", keyword)
