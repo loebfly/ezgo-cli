@@ -114,7 +114,7 @@ func Exec() {
 			fmt.Println("go mod tidy中...")
 			projectDir := filepath.Join(OptionsWorkDir, project)
 			goVersion := getProjectGoVersion(projectDir)
-			//setGoVersion(goVersion)
+			setGoVersion(goVersion)
 			_, err = cmd.ExecInDirWithPrint(projectDir, "go", "mod", "tidy", "-compat="+goVersion)
 			if err != nil {
 				fmt.Printf("执行go mod tidy失败: %s", err.Error())
