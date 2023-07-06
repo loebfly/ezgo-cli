@@ -23,8 +23,8 @@ func Exec() {
 		return
 	}
 	cmdFlag := flag.NewFlagSet(cmd.ModUpdate, flag.ExitOnError)
-	cmdFlag.StringVar(&OptionsWorkDir, "workDir", "", "项目根目录")
-	cmdFlag.StringVar(&OptionsPackages, "packages", "", "要升级的包(包含版本号), 例如: github.com/loebfly/ezgin@v0.1.36, 多个包用逗号分隔")
+	cmdFlag.StringVar(&OptionsWorkDir, "dir", "", "项目根目录")
+	cmdFlag.StringVar(&OptionsPackages, "pkg", "", "要升级的包(包含版本号), 例如: github.com/loebfly/ezgin@v0.1.36, 多个包用逗号分隔")
 	err := cmdFlag.Parse(os.Args[3:])
 	if err != nil {
 		fmt.Println("解析命令行参数失败: ", err.Error())
@@ -51,9 +51,7 @@ func Exec() {
 
 	// 找go.mod
 	for _, project := range projects {
-		if !prompt.SelectUi.IsAgree(fmt.Sprintf("是否升级项目'%s'?", project)) {
-			continue
-		}
+
 		goModPath := filepath.Join(OptionsWorkDir, project, "go.mod")
 		_, err = os.Stat(goModPath)
 		if err != nil {
@@ -80,9 +78,12 @@ func Exec() {
 			}
 
 			if !strings.Contains(string(goModContent), packageName) {
-				fmt.Printf("go.mod文件中未找到该包, 跳过\n")
+				fmt.Printf("go.mod文件中未找到%s包, 跳过\n", packageName)
 				continue
 			} else {
+				//if !prompt.SelectUi.IsAgree(fmt.Sprintf("是否升级项目'%s'?", project)) {
+				//	continue
+				//}
 				fmt.Println("go.mod文件中找到该包, 替换中...")
 			}
 
@@ -113,7 +114,7 @@ func Exec() {
 			fmt.Println("go mod tidy中...")
 			projectDir := filepath.Join(OptionsWorkDir, project)
 			goVersion := getProjectGoVersion(projectDir)
-			setGoVersion(goVersion)
+			//setGoVersion(goVersion)
 			_, err = cmd.ExecInDirWithPrint(projectDir, "go", "mod", "tidy", "-compat="+goVersion)
 			if err != nil {
 				fmt.Printf("执行go mod tidy失败: %s", err.Error())
